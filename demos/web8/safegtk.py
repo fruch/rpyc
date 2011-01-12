@@ -8,10 +8,8 @@ pygtk.require('2.0')
 import gtk
 
 
-safe_gtk_classes = set([
-    "Box", "VBox", "HBox", "Frame", "Entry", "Button", "ScrolledWindow", 
-    "TextView", "Label", 
-])
+safe_gtk_classes = set(["Box", "VBox", "HBox", "Frame", "Entry", "Button", 
+                        "ScrolledWindow", "TextView", "Label"])
 
 class SafeGTK(object):
     for _name in dir(gtk):
@@ -20,4 +18,3 @@ class SafeGTK(object):
     del _name
 
 SafeGTK = SafeGTK()
-
