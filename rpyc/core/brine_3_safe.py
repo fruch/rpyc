@@ -1,5 +1,5 @@
 """
-Orginial Version python 2.4-2.7
+Orginial Version modified to python3
 
 brine - a simple, fast and secure object serializer for immutable objects,
 optimized for small integers [-48..160).
@@ -8,12 +8,14 @@ slice, complex, tuple(of simple types), forzenset(of simple types)
 as well as the following singletons: None, NotImplemented, Ellipsis
 """
 
+#ToDo, 
+#
+# convert to python3 
+# python 3 does not support longs, unicode normal, bytes in.
 
 from cStringIO import StringIO
 
 from rpyc.lib.compatibility import Struct, all
-
-#Here why not id them pickle and unpickle is this not more maintainable ???????
 
 # singletons                               # Why no empty set
 TAG_NONE = "\x00"
