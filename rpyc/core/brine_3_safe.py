@@ -11,42 +11,42 @@ as well as the following singletons: None, NotImplemented, Ellipsis
 #ToDo, 
 #
 # convert to python3 
-# python 3 does not support longs, unicode normal, bytes in.
+# python 3 does not support longs out, unicode standard, bytes in.
 
 from cStringIO import StringIO
 
 from rpyc.lib.compatibility import Struct, all
 
 # singletons                               # Why no empty set
-TAG_NONE = "\x00"
-TAG_EMPTY_STR = "\x01"                     # Blank string
-TAG_EMPTY_TUPLE = "\x02"
-TAG_TRUE = "\x03"
-TAG_FALSE = "\x04"
-TAG_NOT_IMPLEMENTED = "\x05"
-TAG_ELLIPSIS = "\x06"
+TAG_NONE = b"\x00"
+TAG_EMPTY_STR = b"\x01"                     # Blank string
+TAG_EMPTY_TUPLE = b"\x02"
+TAG_TRUE = b"\x03"
+TAG_FALSE = b"\x04"
+TAG_NOT_IMPLEMENTED = b"\x05"
+TAG_ELLIPSIS = b"\x06"
 
 # types
-TAG_UNICODE = "\x08"
-TAG_LONG = "\x09"
-TAG_STR1 = "\x0a"                         # String length 1
-TAG_STR2 = "\x0b"                         # String length 2
-TAG_STR3 = "\x0c"                         # String length 3
-TAG_STR4 = "\x0d"                         # Sting length 4
-TAG_STR_L1 = "\x0e"                       # String length less than 256, uses I1 (byte)
-TAG_STR_L4 = "\x0f"                       # String length greater than 256, uses I4 (long)
-TAG_TUP1 = "\x10"
-TAG_TUP2 = "\x11"
-TAG_TUP3 = "\x12"
-TAG_TUP4 = "\x13"
-TAG_TUP_L1 = "\x14"
-TAG_TUP_L4 = "\x15"
-TAG_INT_L1 = "\x16"
-TAG_INT_L4 = "\x17"
-TAG_FLOAT = "\x18"
-TAG_SLICE = "\x19"
-TAG_FSET = "\x1a"
-TAG_COMPLEX = "\x1b"
+TAG_UNICODE = b"\x08"
+TAG_LONG = b"\x09"
+TAG_STR1 = b"\x0a"                         # String length 1
+TAG_STR2 = b"\x0b"                         # String length 2
+TAG_STR3 = b"\x0c"                         # String length 3
+TAG_STR4 = b"\x0d"                         # Sting length 4
+TAG_STR_L1 = b"\x0e"                       # String length less than 256, uses I1 (byte)
+TAG_STR_L4 = b"\x0f"                       # String length greater than 256, uses I4 (long)
+TAG_TUP1 = b"\x10"
+TAG_TUP2 = b"\x11"
+TAG_TUP3 = b"\x12"
+TAG_TUP4 = b"\x13"
+TAG_TUP_L1 = b"\x14"
+TAG_TUP_L4 = b"\x15"
+TAG_INT_L1 = b"\x16"
+TAG_INT_L4 = b"\x17"
+TAG_FLOAT = b"\x18"
+TAG_SLICE = b"\x19"
+TAG_FSET = b"\x1a"
+TAG_COMPLEX = b"\x1b"
 IMM_INTS = dict((i, chr(i + 0x50)) for i in range(-0x30, 0xa0))       #0x20 to 239  (80-48=32), (80+159=239) ??????????
 
 I1 = Struct("!B")            #What is this

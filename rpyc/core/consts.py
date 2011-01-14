@@ -5,8 +5,8 @@ constants used by the protocol
 from sys import exit as _exit
 
 # Tag used by brine, proxy or pickled object
-TAG_PICKLED = b"\x01"
-TAG_PROXIED = b"\x02"
+TAG_PICKLED = "\x01"
+TAG_PROXIED = "\x02"
 TAG_LENGTH = len(TAG_PICKLED)
 
 if len(TAG_PICKLED) != len(TAG_PROXIED):

@@ -21,8 +21,6 @@ from globals import TAG_PROXIED
 from globals import TAG_LENGTH
 from globals import Core_Exception
 
-
-
 simple_brine_types = frozenset([type(None), type(NotImplemented), type(Ellipsis), 
                                 bool, slice, int, str, float, complex, bytes])
 complex_brine_types = frozenset([frozenset, tuple])

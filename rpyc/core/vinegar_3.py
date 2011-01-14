@@ -13,6 +13,25 @@ import traceback
 from rpyc.core import brine_3 as brine
 from rpyc.core import consts
 
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#dir(builtins) issubclass
+#
+#import builtins
+#import inspect
+
+#for x in dir(builtins):
+#    #print(x, inspect.isclass(getattr(builtins, x)))
+#    if inspect.isclass(getattr(builtins, x)):
+#        print(x, issubclass(getattr(builtins, x), Exception))
+#    else:
+#        print(x, "False")
+#
+#List of builtin exceptions
+#
+#[x for x in dir(builtins) if inspect.isclass(getattr(builtins, x)) and issubclass(getattr(builtins, x), Exception)]
+
+
 from globals import Core_Exception
 
 _generic_exceptions_cache = {}
