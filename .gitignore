@@ -1,7 +1,6 @@
 *.pyc
 .project
 .pydevproject
-__init__.py
 setup.py
 license.py
 dist
