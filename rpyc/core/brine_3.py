@@ -16,13 +16,51 @@ import pickle as _pickler # In python3 this one now attempt to import the cPickl
 
 "Protocol version 3 was added in Python 3.0. It has explicit support for bytes and cannot be unpickled by Python 2.x pickle modules. This is the current recommended protocol, use it whenever it is possible."
 
-TAG_PICKLED = b"\x01"
-TAG_PROXIED = b"\x02"
+from globals import TAG_PICKLED
+from globals import TAG_PROXIED
+from globals import TAG_LENGTH
+from globals import Core_Exception
+
+
 
 simple_brine_types = frozenset([type(None), type(NotImplemented), type(Ellipsis), 
                                 bool, slice, int, str, float, complex, bytes])
 complex_brine_types = frozenset([frozenset, tuple])
 default_brine_types = frozenset(simple_brine_types | complex_brine_types)
+
+#==============================================================================
+# ERRORS
+#==============================================================================
+
+class Brine_Exception(Core_Exception):
+    def __init__(self, err_string, err_type):
+        self.args = (err_string, err_type)
+        self.err_string = err_string
+        self.type = err_type
+    def __str__(self):
+        return self.err_string
+    def __repr__(self):
+        return self.err_string
+
+def _not_dumpable_err(obj):
+    err_string = "cannot dump {0}".format(obj)
+    raise Brine_Exception(err_string,  "not_dumpable")
+
+def _not_loadable_err(obj):
+    err_string = "cannot load {0}".format(obj)
+    raise Brine_Exception(err_string, "not_loadable")
+
+def _not_pickleable_err(obj):
+    err_string = "cannot dump {0}".format(obj)
+    raise Brine_Exception(err_string, "not_pickleable")
+
+def _not_unpickleable_err(obj):
+    err_string = "cannot load {0}".format(obj)
+    raise Brine_Exception(err_string, "not_unpickleable")
+
+def _other_err():
+    err_string = "other error".format()
+    raise Brine_Exception(err_string, "other error")
 
 #==============================================================================
 # Underbelly
@@ -32,14 +70,14 @@ def _pickle(obj):
     try:
         data = _pickler.dumps(obj, protocol = _pickler.HIGHEST_PROTOCOL)
     except _pickler.PicklingError:
-        raise
+        _not_pickleable_err(obj)
     return data
     
 def _unpickle(bytes_object):
     try:
         data = _pickler.loads(bytes_object)
     except _pickler.UnpicklingError:
-        raise
+        _not_unpickleable_err(obj)
     return data
 
 #==============================================================================
@@ -52,16 +90,20 @@ def dump(obj):
         data = _pickle(obj)
         return TAG_PICKLED + data
     else:
-        _undumpable(obj)
+        _not_dumpable_err(obj)
 
 def load(bytes_object):
     """loads the given byte-string representation to an object"""
-    tag = bytes_object[0]
+    tag = bytes_object[0:TAG_LENGTH]
     if tag == TAG_PICKLED:
         return _unpickle(bytes_object[1:])
     elif tag == TAG_PROXIED:
-        print "Tring to unpickel a proxy object"
-        _unloadable(bytes_object)
+        print("Trying to unpickle a proxy object")
+        _not_loadable_err(bytes_object)
+    else:
+        print(tag)
+        print(TAG_PICKLED)
+        _other_err()
 
 def dumpable(obj):
     """indicates whether the object is dumpable by brine"""
@@ -70,16 +112,3 @@ def dumpable(obj):
     if type(obj) in complex_brine_types:
         return all(dumpable(item) for item in obj)
     return False 
-
-#==============================================================================
-# ERRORS
-#==============================================================================
-
-# implement my own errors in here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-def _undumpable(obj):
-    raise TypeError("cannot dump %r" % (obj,))
-
-def _unloadable(obj):
-    raise TypeError("cannot load %r" % (obj,))
-

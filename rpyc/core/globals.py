@@ -4,13 +4,30 @@ constants used by the protocol
 
 from sys import exit as _exit
 
+#=========================================================
+# Errors
+#=========================================================
+
+class Core_Exception(CoreException):
+    def __init__(self, err_string, err_type):
+        self.args = (err_string, err_type)
+        self.err_string = err_string
+        self.type = err_type
+    def __str__(self):
+        return self.err_string
+    def __repr__(self):
+        return self.err_string
+
+
+
 # Tag used by brine, proxy or pickled object
 TAG_PICKLED = b"\x01"
 TAG_PROXIED = b"\x02"
-TAG_LENGTH = len(TAG_PICKLED)
 
 if len(TAG_PICKLED) != len(TAG_PROXIED):
     _exit("bad tag length")
+
+TAG_LENGTH = len(TAG_PICKLED)
 
 # messages
 MSG_REQUEST      = 1

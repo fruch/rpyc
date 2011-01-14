@@ -1,13 +1,19 @@
-from pickle import PicklingError
+
 from nose.tools import raises
 
-import rpyc
+#import rpyc
 
-from rpyc.core.brine_3 import dumpable
-from rpyc.core.brine_3 import dump
-from rpyc.core.brine_3 import load
-from rpyc.core.brine_3 import _pickle
+#from rpyc.core.brine_3 import dumpable
+#from rpyc.core.brine_3 import dump
+#from rpyc.core.brine_3 import load
+#from rpyc.core.brine_3 import _pickle
+#from rpyc.core.brine_3 import Brine_Exception
 
+from brine_3 import dumpable
+from brine_3 import dump
+from brine_3 import load
+from brine_3 import _pickle
+from brine_3 import Brine_Exception
 
 def test_dump_load():
     x = ("he", 7, "llo", 8, (), 900, None, True, 18.2, 18.2j + 13, 
@@ -15,13 +21,16 @@ def test_dump_load():
     assert dumpable(x)
     y = dump(x)
     z = load(y)
+    print(x)
+    print(y)
+    print(z)
     assert x == z
 
-@raises(TypeError)
+@raises(Brine_Exception)
 def test_undumpable():
     x = dump({1:2})
 
-@raises(TypeError)
+@raises(Brine_Exception)
 def test_unloadable():
     x = ("he", 7, "llo", 8, (), 900, None, True, 18.2, 18.2j + 13, 
          slice(1, 2, 3), frozenset([5, 6, 7]), b"\11")
@@ -35,7 +44,7 @@ def test_pickle_direct():
     z =  load(b"\01"+y)
     assert x == z
 
-@raises(PicklingError)
+@raises(Brine_Exception)
 def test_unpickable():
     x = (NotImplemented)
     y = dump(x)
