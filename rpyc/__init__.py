@@ -45,7 +45,5 @@ from rpyc.utils.factory import (connect_stream, connect_channel, connect_pipes,
 from rpyc.utils.helpers import async, timed, buffiter, BgServingThread
 from rpyc.utils import classic
 
-
-
 __author__ = "Tomer Filiba (tomerfiliba@gmail.com)"
 version = __version__ = (__MAJOR__, __MINOR__, __REVISION__)

@@ -8,7 +8,7 @@ from sys import exit as _exit
 # Errors
 #=========================================================
 
-class Core_Exception(CoreException):
+class Rpyc_Exception(Exception):
     def __init__(self, err_string, err_type):
         self.args = (err_string, err_type)
         self.err_string = err_string
@@ -17,8 +17,6 @@ class Core_Exception(CoreException):
         return self.err_string
     def __repr__(self):
         return self.err_string
-
-
 
 # Tag used by brine, proxy or pickled object
 TAG_PICKLED = b"\x01"
@@ -60,4 +58,4 @@ HANDLE_INSPECT   = 16
 HANDLE_BUFFITER  = 17
 
 # optimized exceptions
-EXC_STOP_ITERATION = 1
+EXCEPTION_STOP_ITERATION = 1

@@ -19,7 +19,7 @@ import pickle as _pickler # In python3 this one now attempt to import the cPickl
 from globals import TAG_PICKLED
 from globals import TAG_PROXIED
 from globals import TAG_LENGTH
-from globals import Core_Exception
+from globals import Rpyc_Exception
 
 simple_brine_types = frozenset([type(None), type(NotImplemented), type(Ellipsis), 
                                 bool, slice, int, str, float, complex, bytes])
@@ -30,7 +30,7 @@ default_brine_types = frozenset(simple_brine_types | complex_brine_types)
 # ERRORS
 #==============================================================================
 
-class Brine_Exception(Core_Exception):
+class Brine_Exception(Rpyc_Exception):
     def __init__(self, err_string, err_type):
         self.args = (err_string, err_type)
         self.err_string = err_string

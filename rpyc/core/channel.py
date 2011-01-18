@@ -6,7 +6,7 @@ we deliberately add \\n at the end of each frame.
 
 note: unlike previous versions, this is no longer thread safe
 """
-import zlib
+import zlib # Check zlib is ok.
 
 from rpyc.lib.compatibility import Struct
 
