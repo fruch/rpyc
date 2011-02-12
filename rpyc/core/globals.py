@@ -57,5 +57,5 @@ HANDLE_DEL       = 15
 HANDLE_INSPECT   = 16
 HANDLE_BUFFITER  = 17
 
-# optimized exceptions
+# optimized exceptions           #??????????????????? Is this a special tag or just a value
 EXCEPTION_STOP_ITERATION = 1

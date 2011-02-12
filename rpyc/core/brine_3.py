@@ -31,34 +31,53 @@ default_brine_types = frozenset(simple_brine_types | complex_brine_types)
 #==============================================================================
 
 class Brine_Exception(Rpyc_Exception):
-    def __init__(self, err_string, err_type):
-        self.args = (err_string, err_type)
+    def __init__(self, err_string):
+        self.args = (err_string)
         self.err_string = err_string
-        self.type = err_type
     def __str__(self):
         return self.err_string
     def __repr__(self):
         return self.err_string
 
+class Brine_Dump_Exception(Brine_Exception):
+    def __init__(self, err_string):
+        super(Brine_Dump_Exception, self).__init__(err_string)
+
+class Brine_Load_Exception(Brine_Exception):
+    def __init__(self, err_string):
+        super(Brine_Load_Exception, self).__init__(err_string)
+
+class Brine_Pickle_Exception(Brine_Exception):
+    def __init__(self, err_string):
+        super(Brine_Pickle_Exception, self).__init__(err_string)
+
+class Brine_Unpickle_Exception(Brine_Exception):
+    def __init__(self, err_string):
+        super(Brine_Unpickle_Exception, self).__init__(err_string)
+
+class Brine_Other_Exception(Brine_Exception):
+    def __init__(self, err_string):
+        super(Brine_Other_Exception, self).__init__(err_string)
+
 def _not_dumpable_err(obj):
     err_string = "cannot dump {0}".format(obj)
-    raise Brine_Exception(err_string,  "not_dumpable")
+    raise Brine_Dump_Exception(err_string)
 
 def _not_loadable_err(obj):
     err_string = "cannot load {0}".format(obj)
-    raise Brine_Exception(err_string, "not_loadable")
+    raise Brine_Load_Exception(err_string)
 
 def _not_pickleable_err(obj):
-    err_string = "cannot dump {0}".format(obj)
-    raise Brine_Exception(err_string, "not_pickleable")
+    err_string = "cannot pickle {0}".format(obj)
+    raise Brine_Pickle_Exception(err_string)
 
 def _not_unpickleable_err(obj):
-    err_string = "cannot load {0}".format(obj)
-    raise Brine_Exception(err_string, "not_unpickleable")
+    err_string = "cannot unpickle {0}".format(obj)
+    raise Brine_Unpickle_Exception(err_string)
 
 def _other_err():
     err_string = "other error".format()
-    raise Brine_Exception(err_string, "other error")
+    raise Brine_Other_Exception(err_string)
 
 #==============================================================================
 # Underbelly
@@ -99,8 +118,8 @@ def load(bytes_object):
         print("Trying to unpickle a proxy object")
         _not_loadable_err(bytes_object)
     else:
-        print(tag)
-        print(TAG_PICKLED)
+        print("Illegal tag {0}".format(tag))
+        print("known tags TAG_PICKLED={0}, TAG_PROXIED={1}".format(TAG_PICKLED, TAG_PROXIED))
         _other_err()
 
 def dumpable(obj):
