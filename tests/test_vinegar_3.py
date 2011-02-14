@@ -11,10 +11,6 @@ from external_exception_for_vin3 import external_exception as external_exception
 def check_equal(dictionary_of_key_values):
     """Just a useful function to make nose stdout readable."""
     
-    #keys
-    #values
-    #all[]
-    
     print("-"*30)
     print("Testing")
     result = False
@@ -184,7 +180,7 @@ class test_dump_load(object):
         decoded_exception = load(brimable_data)
         
         # This decoded exception will be an generic representation of the custom exception above
-        # This is because instantiate_custom_exceptions and import_custom_exceptions are both off
+        # This is because instantiate_custom_exceptions and use_nonstandard_exceptions are both off
         
         # Should not have arguments
         print("-"*30)
@@ -200,9 +196,9 @@ class test_dump_load(object):
         print("Checking representation of exception")
         print("type(decoded_exception)={0}".format(repr(type(decoded_exception))))
         print("type(orginal exception)={0}".format(type(exception_instance)))
-        assert repr(type(decoded_exception)) == repr(type(exception_instance))
+        assert type(decoded_exception) == type(exception_instance)
         
-    def test_custom_xecpt_with_args(self):
+    def test_custom_xecpt_as_generic_with_args(self):
         """Check can serialise and unserialse a Exception with arguments"""
         arguments_to_pass = "example_string", "ERROR_TYPE_TEST"
         exception_instance = my_exception_with_args(*arguments_to_pass)
@@ -219,7 +215,7 @@ class test_dump_load(object):
         assert arguments == arguments_to_pass
         
         #Load
-        decoded_exception = load(brimable_data)
+        decoded_exception = load(brimable_data, use_nonstandard_exceptions=False)
         
         print("-"*30)
         print("decoded_mod_name : {0} == {1} : orginal_mod_name".format(decoded_exception.__module__, my_exception_with_args.__module__))
@@ -238,7 +234,7 @@ class test_dump_load(object):
         assert hasattr(decoded_exception, "_remote_tb")
         
         # This decoded exception will be an generic representation of the my_exception_with_args exception above
-        # This is because instantiate_custom_exceptions and import_custom_exceptions are both off
+        # This is because instantiate_custom_exceptions and use_nonstandard_exceptions are both off
         print("-"*30)
         print("isinstance(decoded_exception, GenericException)")
         assert isinstance(decoded_exception, GenericException)
@@ -267,36 +263,62 @@ class test_dump_load(object):
         new_module_name = "unfindable_module"
         print("Changing module name to '{0}'".format(new_module_name))
         brimable_data = (new_module_name, exception_class_name), arguments, attributes, traceback_txt
-        decoded_exception = load(brimable_data, import_custom_exceptions=True)
+        decoded_exception = load(brimable_data, allow_importfail=False)
     
     def test_imported_exception(self):
         """Here we have a custom exception imported under a different name.  rpyc will try and import it.
         It will use two methods instantiate_custom exceptions
         """
         exception_instance = external_exception_renamed()
-        print("333", exception_instance.args)
-        raise exception_instance
+        print("orginal exception arguments=", exception_instance.args)
+        
         cls, instance, traceback = simulate_raise_exception(exception_instance)
         brimable_data = dump(cls, instance, traceback)
         (module_name, exception_class_name), arguments, attributes, traceback_txt = brimable_data
         
-        print(arguments)
+        print("decoding exception arguments=", arguments)
         
         print("module_name={0},\nexception_class_name={1},\narguments={2},\nattributes={3},\ntraceback_txt='{4}'".format(
                         module_name, exception_class_name, arguments, attributes, traceback_txt.replace('\n', '')))
+        
+        print("-"*30)
+        print("Changing module name to test that")
         assert module_name == "external_exception_for_vin3"
         assert exception_class_name == "external_exception"
         
         print("-"*30)
         print("Now trying to load external module")
-        decoded_exception = load(brimable_data, import_custom_exceptions=True)
+        decoded_exception = load(brimable_data)
+        
+        print("-"*40)
+        print("testing example exception attr")
+        print("exception_instance.external_demo_attr=", exception_instance.external_demo_attr)
+        print("decoded_exception.external_demo_attr=", decoded_exception.external_demo_attr)
+        assert decoded_exception.external_demo_attr == 2
+        print("PASS")
+        
+        print("-"*40)
+        print("testing argument passing")
+        print("exception_instance.args=", exception_instance.args)
+        print("decoded_exception.args=", decoded_exception.args)
+        assert decoded_exception.args == ('I am alive',)
+        print("PASS")
+        
+        print("-"*40)
+        print("testing exception instantated correctly")
         print("type(decoded_exception)={0}".format(type(decoded_exception)))
         print("type(exception_instance)={0}".format(type(exception_instance)))
-        print(type(decoded_exception) == type(exception_instance))
-        print(exception_instance.args, exception_instance.external_demo_attr)
         assert type(decoded_exception) == type(exception_instance)
+        print("PASS")
         
-    
-    
-    def erm_test_many(self):
-        pass
+    def test_imported_exception2(self):
+        brimable_data = ("external_exception2_for_vin3", "orphan_external_exception"), ('I am alive',), (('external_demo_attr', 2),), "EXAMPLE_TRACEBACK"
+        decoded_exception = load(brimable_data)
+        from external_exception2_for_vin3 import orphan_external_exception
+        
+        print("decoded_exception.args=", decoded_exception.args)
+        assert decoded_exception.args == ('I am alive',)
+        
+        print("type(decoded_exception)={0}".format(type(decoded_exception)))
+        print("Real exception imported orginal={0}".format(type(orphan_external_exception())))
+        assert type(decoded_exception) == type(orphan_external_exception())

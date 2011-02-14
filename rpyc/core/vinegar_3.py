@@ -161,9 +161,8 @@ class GenericException(Exception):
     """This is used to create pseudo exceptions"""
     pass
 
-
-def load(brined_xcept, import_custom_exceptions=False):
-#def load(brined_xcept, import_custom_exceptions, instantiate_exceptions, instantiate_oldstyle_exceptions):
+def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
+#def load(brined_xcept, use_nonstandard_exceptions, instantiate_exceptions, instantiate_oldstyle_exceptions):
     """ Loads brined exception
     
     return exception returns an exception object that can be raised."""
@@ -178,23 +177,33 @@ def load(brined_xcept, import_custom_exceptions=False):
     except ValueError:
         _load_err()
     
-    #We may want to import a module to get a custom extension
-    if import_custom_exceptions and modname not in sys.modules:
-        
-        try:   # Should use class name here
-            print("errrmmm")
-            mod = __import__(modname, None, None, fromlist=[clsname])    #Scarey to me could this not change a global and fuck the world !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        except ImportError:
-            print("errrr")
-            _import_err(modname)
     
+    print("DO A CUSTOM IMPORT", modname not in sys.modules)
+    
+    #We may want to import a module to get a custom extension
+    if use_nonstandard_exceptions and modname not in sys.modules:
+        try:   # Should use class name here
+            mod = __import__(modname, None, None, fromlist=[clsname])    #Scarey to me could this not change a global and fuck the world !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            print("DOES CUSTOM IMPORT", mod)
+            print("CUSTOM IMPORT SUCCESS =", modname in sys.modules)
+        except ImportError:
+            print("Warning: FAILED TO DO CUSTOM IMPORT")
+            
+            if allow_importfail:
+                pass
+            else:
+                _import_err(modname)
+            
     #Here we create a local representation of the exception
+    print("MODNAME=", modname)
     if modname == "builtins":                       # Not valid in python3, exceptions have been moved to builtins
         cls = getattr(builtins, clsname, None)
         if not inspect.isclass(cls) and issubclass(cls, BaseException):
             load_err()
         exc = cls(*args)
-    elif modname not in sys.modules:
+    elif use_nonstandard_exceptions and modname in sys.modules:   #!!!!!!!!!!!!  Check module is known
+        print("INITALISE NON STANDARD EXCEPTION")
+        
         try:
             cls = getattr(sys.modules[modname], clsname, None)
         except KeyError:
@@ -206,9 +215,10 @@ def load(brined_xcept, import_custom_exceptions=False):
         else:
             if not inspect.isclass(cls) and issubclass(cls, BaseException):
                 load_err()
+            
             exc = cls(*args)
     else:
-        #print("Unknown module, making a generic representation of it")
+        print("Unknown module, making a generic representation of it")
         fullname = "{0}.{1}".format(modname, clsname)
         if fullname not in _generic_exceptions_cache:
             #fakemodule = {"__module__" : "{0}.{1}".format(__name__, modname)}
@@ -218,6 +228,7 @@ def load(brined_xcept, import_custom_exceptions=False):
         exc = cls()
         exc.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
+    print("The attrs", attrs)
     for name, attrval in attrs:
         setattr(exc, name, attrval)
     
