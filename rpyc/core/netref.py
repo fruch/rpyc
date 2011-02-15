@@ -11,7 +11,6 @@ import cPickle as pickle
 
 from rpyc.core import consts
 
-
 _local_netref_attrs = frozenset([
     '____conn__', '____oid__', '__class__', '__cmp__', '__del__', '__delattr__', 
     '__dir__', '__doc__', '__getattr__', '__getattribute__', '__hash__', 
