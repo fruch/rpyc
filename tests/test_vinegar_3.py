@@ -1,7 +1,7 @@
 import sys
 import traceback
 from nose.tools import raises
-from globals import EXCEPTION_STOP_ITERATION
+from global_consts import EXCEPTION_STOP_ITERATION
 from inspect import ismethod, isfunction
 
 from vinegar_3 import dump, load, install_rpyc_excepthook, uninstall_rpyc_excepthook, rpyc_excepthook, Vinegar_Import_Exception, GenericException

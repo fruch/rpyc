@@ -9,8 +9,8 @@ import inspect
 
 import brine_3 as brine
 
-from globals import EXCEPTION_STOP_ITERATION
-from globals import Rpyc_Exception
+from global_consts import EXCEPTION_STOP_ITERATION
+from global_consts import Rpyc_Exception
 
 inbuilt_expections = {xept: getattr(builtins, xept) for xept in dir(builtins) 
                       if inspect.isclass(getattr(builtins, xept)) 
@@ -19,7 +19,7 @@ inbuilt_expections = {xept: getattr(builtins, xept) for xept in dir(builtins)
 _generic_exceptions_cache = {}
 
 #==============================================================
-# Errors
+# Module Specfic Errors
 #==============================================================
 
 class Vinegar_Exception(Rpyc_Exception):
@@ -29,7 +29,7 @@ class Vinegar_Exception(Rpyc_Exception):
     when dealing with the encoding, passing, and decoding of errors.
     """
     def __init__(self, err_string=''):
-        self.args = (err_string)   #This contains info about the error, cause etc, can be a tuple of a string, tuple in this case
+        self.args = (err_string,)   #This contains info about the error, cause etc, can be a tuple of a string, tuple in this case
         self.err_string = err_string
     def __str__(self):
         return self.err_string
@@ -37,19 +37,19 @@ class Vinegar_Exception(Rpyc_Exception):
         return self.err_string
 
 class Vinegar_Dump_Exception(Vinegar_Exception):
-    def __init__(self, err_string):
+    def __init__(self, err_string="Vinegar_Dump_Exception"):
         super(Vinegar_Dump_Exception, self).__init__(err_string)
 
 class Vinegar_Load_Exception(Vinegar_Exception):
-    def __init__(self, err_string):
+    def __init__(self, err_string="Vinegar_Load_Exception"):
         super(Vinegar_Load_Exception, self).__init__(err_string)
 
 class Vinegar_Import_Exception(Vinegar_Exception):
-    def __init__(self, err_string):
+    def __init__(self, err_string="Vinegar_Import_Exception"):
         super(Vinegar_Import_Exception, self).__init__(err_string)
 
 class Vinegar_Excepthook_Exception(Vinegar_Exception):
-    def __init__(self, err_string):
+    def __init__(self, err_string="Vinegar_Excepthook_Exception"):
         super(Vinegar_Excepthook_Exception, self).__init__(err_string)
 
 def _dump_err():

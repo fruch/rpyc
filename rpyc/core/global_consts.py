@@ -33,10 +33,10 @@ MSG_REPLY        = 2
 MSG_EXCEPTION    = 3
 
 # boxing
-LABEL_VALUE      = 1
-LABEL_TUPLE      = 2
-LABEL_LOCAL_REF  = 3
-LABEL_REMOTE_REF = 4
+LABEL_IMMUTABLE     = 1 # immutable data
+LABEL_MUT_TUPLE     = 2 # tuple containing mutables
+LABEL_EXISTING_PROXY= 3 # existing proxy
+LABEL_NEW_PROXY     = 4 # new proxy
 
 # action handlers
 HANDLE_PING      = 1

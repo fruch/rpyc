@@ -16,14 +16,15 @@ import pickle as _pickler # In python3 this one now attempt to import the cPickl
 
 "Protocol version 3 was added in Python 3.0. It has explicit support for bytes and cannot be unpickled by Python 2.x pickle modules. This is the current recommended protocol, use it whenever it is possible."
 
-from globals import TAG_PICKLED
-from globals import TAG_PROXIED
-from globals import TAG_LENGTH
-from globals import Rpyc_Exception
+from global_consts import TAG_PICKLED
+from global_consts import TAG_PROXIED
+from global_consts import TAG_LENGTH
+from global_consts import Rpyc_Exception
 
 simple_brine_types = frozenset([type(None), type(NotImplemented), type(Ellipsis), 
                                 bool, slice, int, str, float, complex, bytes])
 complex_brine_types = frozenset([frozenset, tuple])
+
 default_brine_types = frozenset(simple_brine_types | complex_brine_types)
 
 #==============================================================================
@@ -41,23 +42,23 @@ class Brine_Exception(Rpyc_Exception):
 
 class Brine_Dump_Exception(Brine_Exception):
     def __init__(self, err_string):
-        super(Brine_Dump_Exception, self).__init__(err_string)
+        super().__init__(err_string="Brine_Dump_Exception")
 
 class Brine_Load_Exception(Brine_Exception):
     def __init__(self, err_string):
-        super(Brine_Load_Exception, self).__init__(err_string)
+        super().__init__(err_string="Brine_Load_Exception")
 
 class Brine_Pickle_Exception(Brine_Exception):
     def __init__(self, err_string):
-        super(Brine_Pickle_Exception, self).__init__(err_string)
+        super().__init__(err_string="Brine_Pickle_Exception")
 
 class Brine_Unpickle_Exception(Brine_Exception):
     def __init__(self, err_string):
-        super(Brine_Unpickle_Exception, self).__init__(err_string)
+        super().__init__(err_string="Brine_Unpickle_Exception")
 
 class Brine_Other_Exception(Brine_Exception):
     def __init__(self, err_string):
-        super(Brine_Other_Exception, self).__init__(err_string)
+        super().__init__(err_string="Brine_Other_Exception")
 
 def _not_dumpable_err(obj):
     err_string = "cannot dump {0}".format(obj)

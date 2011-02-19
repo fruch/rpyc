@@ -13,6 +13,11 @@ from threading import Lock, RLock, Event
 import weakref
 #from weakref import WeakValueDictionary as WeakValueDict
 
+from collections import Counter
+
+# Replace this with the heavy weight one python3 only, counter with locking
+
+
 class WeakValueDict(object):
     """a light-weight version of weakref.WeakValueDictionary"""
     __slots__ = ("_dict",)
@@ -64,6 +69,25 @@ class WeakValueDict(object):
     def clear(self):
         self._dict.clear()
 
+
+class WeakCounter(Counter):
+    def __init__(self):
+        self._lock = Lock()
+    
+    def __getitem__(self, key):
+        with self._lock:
+            print("locked")
+            ret_val = super().__getitem__(key)
+        print("unlocked")
+        return ret_val
+    
+    def __delitem__(self, key):
+        with self._lock:
+            print("locked")
+            ret_val = super().__delitem__(key)
+        print("unlocked")
+        return ret_val
+    
 class RefCountingColl(object):
     """a set-like object that implements refcounting on its contained objects"""
     __slots__ = ("_lock", "_dict")

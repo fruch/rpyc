@@ -27,12 +27,12 @@ _builtin_types = [
     types.CodeType, types.FrameType, types.TracebackType, xrange,
     types.ModuleType, types.FunctionType,
     
-    type(int.__add__), # wrapper_descriptor
-    type((1).__add__), # method-wrapper
-    type(iter([])), # listiterator
-    type(iter(())), # tupleiterator
+    type(int.__add__),      # wrapper_descriptor
+    type((1).__add__),      # method-wrapper
+    type(iter([])),         # listiterator
+    type(iter(())),         # tupleiterator
     type(iter(xrange(10))), # rangeiterator
-    type(iter(set())), # setiterator
+    type(iter(set())),      # setiterator
 ]
 
 _normalized_builtin_types = dict(((t.__name__, t.__module__), t) 
