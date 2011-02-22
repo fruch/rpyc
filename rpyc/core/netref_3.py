@@ -3,6 +3,14 @@ NetRef - transparent network references implementation.
 
 SURGEON GENERAL'S WARNING: Black magic is known to causes Lung Cancer,
 Heart Disease, Emphysema, and May Complicate Pregnancy. Close your eyes!
+
+
+The why
+What it does
+
+The common API
+
+
 """
 import sys
 import inspect

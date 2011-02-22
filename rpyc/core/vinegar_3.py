@@ -1,6 +1,26 @@
 """
 vinegar_3 ('when things go sour'): serialization/deserializer of exceptions.
 
+The why:
+To allow exceptions to be serized and unserialsed, allowing the passing of them across computers.
+The allow instilation of custom exception hook, to allow display of remote traceback objects.
+
+Main api::
+
+dump(exception_class, exception_instance, traceback_obj, include_local_traceback=True)
+    turn exception data, into a tuple of relevent dumpable data
+    
+    N.B.
+    sys.exc_info()¶ 
+        This function returns a tuple of three values that give information about the exception that is currently being handled.
+        If no exception is being handled anywhere on the stack, a tuple containing three None values is returned. Otherwise, the values returned are (type, value, traceback). 
+    
+load(exception_data, use_nonstandard_exceptions=True, allow_importfail=True)
+    turn exception data into an actual exception instance that can be raised
+
+
+install_rpyc_excepthook()       # Install the custom exception hook
+uninstall_rpyc_excepthook()     # Uninstall the custom exception hook
 """
 import sys
 import traceback
@@ -68,6 +88,14 @@ def _excepthook_err():
     """This error covers the event if the new exception handling hook which 
     handles remote tracebacks can't be installed"""
     raise Vinegar_Excepthook_Exception("Vinegar:: Couldn't find sys.excepthook")
+
+#==============================================================
+# Underbelly
+#==============================================================
+
+class GenericException(Exception):
+    """This is used to create pseudo exceptions"""
+    pass
 
 #==============================================================
 # API
@@ -151,29 +179,23 @@ def dump(exception_class, exception_instance, traceback_obj, include_local_trace
             d_attr_val = make_dumpable(attr_val)
             attrs.append((name, d_attr_val))
     
-    return (exception_class.__module__, exception_class.__name__), tuple(args), tuple(attrs), traceback_txt
+    exception_data = (exception_class.__module__, exception_class.__name__), tuple(args), tuple(attrs), traceback_txt
+    return exception_data
 
-#==============================================================
-# Underbelly
-#==============================================================
 
-class GenericException(Exception):
-    """This is used to create pseudo exceptions"""
-    pass
-
-def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
-#def load(brined_xcept, use_nonstandard_exceptions, instantiate_exceptions, instantiate_oldstyle_exceptions):
+def load(exception_data, use_nonstandard_exceptions=True, allow_importfail=True):
+#def load(exception_data, use_nonstandard_exceptions, instantiate_exceptions, instantiate_oldstyle_exceptions):
     """ Loads brined exception
     
     return exception returns an exception object that can be raised."""
     
     #Special case
-    if brined_xcept == EXCEPTION_STOP_ITERATION:
+    if exception_data == EXCEPTION_STOP_ITERATION:
         return StopIteration() # optimization short hand #Should this be StopIteration()
     
     #Pull out values
     try:
-        (modname, clsname), args, attrs, traceback_txt = brined_xcept           #This matches return of dump func
+        (modname, clsname), args, attrs, traceback_txt = exception_data           #This matches return of dump func
     except ValueError:
         _load_err()
     
@@ -183,7 +205,7 @@ def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
     #We may want to import a module to get a custom extension
     if use_nonstandard_exceptions and modname not in sys.modules:
         try:   # Should use class name here
-            mod = __import__(modname, None, None, fromlist=[clsname])    #Scarey to me could this not change a global and fuck the world !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            mod = __import__(modname, None, None, fromlist=[clsname])
             print("DOES CUSTOM IMPORT", mod)
             print("CUSTOM IMPORT SUCCESS =", modname in sys.modules)
         except ImportError:
@@ -200,7 +222,7 @@ def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
         cls = getattr(builtins, clsname, None)
         if not inspect.isclass(cls) and issubclass(cls, BaseException):
             load_err()
-        exc = cls(*args)
+        the_exception = cls(*args)
     elif use_nonstandard_exceptions and modname in sys.modules:   #!!!!!!!!!!!!  Check module is known
         print("INITALISE NON STANDARD EXCEPTION")
         
@@ -216,7 +238,7 @@ def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
             if not inspect.isclass(cls) and issubclass(cls, BaseException):
                 load_err()
             
-            exc = cls(*args)
+            the_exception = cls(*args)
     else:
         print("Unknown module, making a generic representation of it")
         fullname = "{0}.{1}".format(modname, clsname)
@@ -225,19 +247,19 @@ def load(brined_xcept, use_nonstandard_exceptions=True, allow_importfail=True):
             fakemodule = {"__module__" : "{0}".format(modname)}
             _generic_exceptions_cache[fullname] = type(clsname, (GenericException,), fakemodule)  #!!!!!!!!!!!!!!!! why use this
         cls = _generic_exceptions_cache[fullname]
-        exc = cls()
-        exc.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        the_exception = cls()
+        the_exception.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
     print("The attrs", attrs)
     for name, attrval in attrs:
-        setattr(exc, name, attrval)
+        setattr(the_exception, name, attrval)
     
-    if hasattr(exc, "_remote_tb"):
-        exc._remote_tb += (traceback_txt,)
+    if hasattr(the_exception, "_remote_tb"):
+        the_exception._remote_tb += (traceback_txt,)
     else:
-        exc._remote_tb = (traceback_txt,)
+        the_exception._remote_tb = (traceback_txt,)
     
-    return exc
+    return the_exception
 
 #==============================================================================
 # customized except hook

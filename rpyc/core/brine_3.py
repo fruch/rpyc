@@ -5,6 +5,19 @@ brine - a simple, fast and secure object serializer for immutable objects,
 the following types are supported: int, long, bool, str, float, unicode, 
 slice, complex, tuple(of simple types), forzenset(of simple types)
 as well as the following singletons: None, NotImplemented, Ellipsis
+
+#===============================================
+My description:  To allow the passing of immutable data from one computer to the next.  
+But we want remote procedure calls, so only immutable data should be passed, the rest should be proxied first the brined.
+
+Main api
+dump      : takes an object and returns it serised
+load      : takes serialsed data and returns and object
+dumpable  : checks if data meats our requirements for dumpababilty, we have a list of immutable types
+
+Other maybe used api
+_pickle    : Just a tiny wrapper of native python pickle that interchanges a pickle exception for a brine type one
+_unpickle  : Just a tiny wrapper of native python pickle that interchanges a pickle exception for a brine type one
 """
 
 # This one is not as secure as orginal!  Security is overrated.

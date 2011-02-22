@@ -1,5 +1,82 @@
 """
 The RPyC protocol 
+
+The Connection class implements the RPyC protocol itself.
+
+################
+#
+# Connection
+#
+################
+
+The constructor of Connection takes the following parameters:
+
+service - the service class which this side of the connection exposes. The service class is instantiated and initialized in the constructor. 
+channel - the channel object on which this connection operates 
+config  - the config dict (by default {}, which means the default config is used) 
+
+#-------------
+#
+#  API:
+#
+#-------------
+
+close()                                       - closes the connections and releases all resources 
+closed                                        - a property indicating whether this protocol object is closed 
+fileno()                                      - returns the file descriptor of the underlying channel 
+ping(data, timeout)                           - checks if the other party is alive 
+serve()                                       - serves a single request (blocking) 
+serve_all()                                   - serve all requests until the connection closes (blocking) 
+poll(timeout = 0)                             - serves a single request, if one received within the given timeout (nonblocking) 
+poll_all(timeout = 0)                         - serves all requests within the given timeout (nonblocking) 
+sync_request(handler, *args)                  - performs a synchronous request to 'handler' with 'args' 
+async_request(handler, *args, timeout = None) - performs an asynchronous request to 'handler' with 'args', with an optional timeout limit. Returns an AsyncResult. 
+root                                          - a property that fetches the other party's service object (referred to as "root") 
+
+#---------------
+#
+# Configuration
+#
+#---------------
+
+The protocol object can be configured using the config dict, with the following parameters:
+
+#========================================================================
+#Name                           Type     Default     Description 
+#========================================================================
+#   Attributes 
+#------------------------------------------------------------------------
+allow_safe_attrs                bool     True          whether to allow attribute access to safe attributes 
+safe_attrs set                  …                      a set of attribute names considered safe (i.e., __iter__, __mul__, etc.) 
+allow_exposed_attrs             bool     True          whether to allow access to attributes beginning with a well-defined prefix 
+exposed_prefix                  str     "exposed_"     the prefix of exposed attributes 
+allow_public_attrs              bool     False         whether to allow access to public attributes (name does not begin with '_') 
+allow_all_attrs                 bool     False         whether to allow access to all attributes (including special and private) 
+#------------------------------------------------------------------------
+#   Exceptions 
+#------------------------------------------------------------------------
+include_local_traceback         bool      True         whether to include the local traceback text in the vinegared exception info 
+instantiate_custom_exceptions   bool      False        whether to allow instantiation of custom exceptions classes (non-builtin exceptions) 
+import_custom_exceptions        bool      False        whether to allow importing custom modules 
+instantiate_oldstyle_exceptions bool      False        whether to allow instantiation of old-style classes (not deriving from Exception) 
+propagate_SystemExit            bool      False        whether to propagate the SystemExit exception from one party to the other, or whether it should be dealt with locally (terminating the local party). 
+#------------------------------------------------------------------------
+#   Misc 
+#------------------------------------------------------------------------
+debug                           bool      False        whether to print debug logs (used to debug the protocol) 
+allow_pickle                    bool      False        whether to allow object pickling 
+
+    connid = None,     ?????????????????????
+    credentials = None,?????????????????????
+    allow_getattr = True, ??????????????????
+    allow_setattr = False,??????????????????
+    allow_delattr = False,??????????????????
+
+#========================================================================
+
+
+Is an id collision possible between the two codes???????!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 """
 import sys
 import select
@@ -7,8 +84,9 @@ import weakref
 import itertools
 import pickle
 from threading import Lock
+from collections import namedtuple
 
-from rpyc.lib.lib import WeakValueDict, RefCountingColl
+from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # DOn't understand why locking and why weak
 
 import brine_3 as brine
 import vinegar_3 as vinegar
@@ -103,15 +181,16 @@ DEFAULT_CONFIG = dict(
     credentials = None,
     )
 
-_connection_id_generator = itertools.count(1)
-
-
 #==============================================================
 # Main program
 #==============================================================
 
 class register_handler(object):
-    """This is used to register the handlers in the _HANDLER dict in Connection"""
+    """This decorator is used to register the handlers in the _HANDLER dict in Connection
+    
+    handler_constant is a number
+    handler register is dictionary like object
+    register[handler_const] = handler_func"""
     def __init__(self, handler_constant, handler_register):
         self.handler_constant = handler_constant
         self.handler_register = handler_register
@@ -130,54 +209,183 @@ class Connection(object):
       connection. default is True. if set to False, you will need to call
       _init_service manually later
     """
-    
+    _connection_id_generator = itertools.count(1)
     _HANDLERS = {}
+    packer = namedtuple("package", "label, contents")
     
     def __init__(self, service, channel, config = {}, _lazy = False):
         """
-        self._closed = bool status of connection, access through a property
-        self._config = Settings for the connection, default = DEFAULT_CONFIG
+        _closed = bool status of connection, access through a property
+        _config = Settings for the connection, default = DEFAULT_CONFIG
+        
+        _local_objects   = added to when boxing something new and mutable
+                            {oid: obj} dictionary, native objects to native object ids
+        
+        _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
+                        {oid: weakref(obj, callback)} 
+        _lazy = initiaslise service
+        
         """
+        #  Close the connection while we set it up
         self._closed = True
         
+        #  Setup the config
         self._config = DEFAULT_CONFIG.copy()
         self._config.update(config)
         if self._config["connid"] is None:
-            self._config["connid"] = "conn%d" % (_connection_id_generator.next(),)
+            self._config["connid"] = "conn{conn_id}".format(conn_id=_connection_id_generator.__next__())
         
         self._channel = channel
         self._remote_root = None
         self._local_root = service(weakref.proxy(self))
         
+        self._local_objects = Locking_dict()        # {oid: obj} dictionary, native objects to native object ids
+        self._proxy_cache = WeakValueDictionary()   # Dunno??????????????????????????
+        
         self._seqcounter = itertools.count()
+        
+        self._netref_classes_cache = {}
+        
         self._recvlock = Lock()
         self._sendlock = Lock()
+        
         self._sync_replies = {}
         self._async_callbacks = {}
-        self._local_objects = RefCountingColl()
+        
         self._last_traceback = None
-        self._proxy_cache = WeakValueDict()
-        self._netref_classes_cache = {}
         
         if not _lazy:
             self._init_service()
         
+        # Open this connection as we have finished setting it up
         self._closed = False
     
-    #---
+    #------------------------------------------------------
+    #  Properties
+    #------------------------------------------------------
+    
+    @property
+    def closed(self):
+        """returns status of connection object"""
+        # Why does this need to be a property?  Read only access? But who protects _closed? and surely it should at least be __closed private:)
+        # Why not just a get_status simple function?????????????????????????????????????????????????????????????????????????????
+        return self._closed
+    
+    @property
+    def root(self):
+        # Check this is correct one argument to sync request
+        """fetch the root object of the other party"""
+        if self._remote_root is None:
+            self._remote_root = self.sync_request(global_consts.HANDLE_GETROOT)
+        return self._remote_root
+    
+    #------------------------------------------------------
+    # Boxing, wrap up the objects and label them
+    #  In python everything is an object! and thus everything supports id and type
+    #------------------------------------------------------
+    
+    def _box(self, obj):                  # Might be nice to have *obj
+        """label and store a local object in such a way that it could be recreated on
+        the remote party either by-value or by-reference
+        
+        returns package = named_tuple(label, contents)        :for some labels, contents may be a tuple
+        """
+        
+        # Looks more like label an object, and make it suitable for encoding/decoding
+        
+        # Make it symetrical, so yields a package
+        
+        if brine.dumpable(obj):
+            package = Connection.packer(label=global_consts.LABEL_IMMUTABLE, contents=obj)
+        
+        elif type(obj) is tuple:
+            package = Connection.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
+        
+        elif isinstance(obj, netref.BaseNetref) and obj.____conn__() is self:   #This one detects local proxy objects
+            package = Connection.packer(label=global_consts.LABEL_EXISTING_PROXY, contents=obj.____oid__)
+        # If detected local on box A, can the label be local on box B?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # I think above might be wrong, must come back and check when have a fuller understanding
+        
+        else:
+            oid = id(obj)   #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            self._local_objects[oid] = obj  #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            cls = getattr(obj, "__class__", type(obj))
+            package = Connection.packer(label=global_consts.LABEL_NEW_PROXY, contents=(oid, cls.__name__, cls.__module__))
+        
+        return package
+        
+        # Should I check if obj in _local_objects, or empty it sometimes
+        
+        # inspect.getmodule (maybe this is better)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # If can't get name or module what to do???!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+    #Better labels
+    
+    #EXISTING_OBJECT_ID
+    #NEW_OBJECT_ID
+    
+    def _unbox(self, package):
+        """recreate a local object representation of the remote object: if the
+        object is passed by value, just return it; if the object is passed by
+        reference, create a netref to it"""
+        label, contents = package
+        
+        if label == global_consts.LABEL_IMMUTABLE:
+            obj = contents
+            return obj
+        
+        elif label == global_consts.LABEL_MUT_TUPLE:
+            mut_tuple = tuple(self._unbox(item) for item in contents)
+            return mut_tuple
+        
+        elif label == global_consts.LABEL_EXISTING_PROXY:       # Needs some thought###################
+            oid = contents
+            try:
+                existing_proxy = self._local_objects[oid]
+            except KeyError:
+                print("labeled as native but I know nothing of this proxy")
+                raise
+            return existing_proxy
+        
+        elif label == global_consts.LABEL_NEW_PROXY:
+            oid, clsname, modname = contents
+            if oid in self._proxy_cache:
+                return self._proxy_cache[oid]
+            proxy = self._netref_factory(oid, clsname, modname)
+            self._proxy_cache[oid] = proxy
+            return proxy
+        
+        else:
+            raise Protocol_Unbox_Exception("Couldn't unbox, invalid label={label}".format(label=label))
+    
+    def _netref_factory(self, oid, clsname, modname):
+        #Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        typeinfo = (clsname, modname)
+        if typeinfo in self._netref_classes_cache:
+            cls = self._netref_classes_cache[typeinfo]
+        elif typeinfo in netref.builtin_classes_cache:
+            cls = netref.builtin_classes_cache[typeinfo]
+        else:
+            info = self.sync_request(global_consts.HANDLE_INSPECT, oid)
+            cls = netref.class_factory(clsname, modname, info)
+            self._netref_classes_cache[typeinfo] = cls
+        return cls(weakref.ref(self), oid)
+    
+    #------------------------------------------------------
     #  Startup
-    #---
+    #------------------------------------------------------
     def _init_service(self):
         """Dunno """ #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # Seem to be a weak proxy to the service
         self._local_root.on_connect()
     
-    #---
+    #------------------------------------------------------
     #  Shutdown, cleanup and __del__
-    #---
+    #------------------------------------------------------
     def close(self, _catchall=True):
         if self._closed:
             return
+        
         self._closed = True
         
         try:
@@ -195,7 +403,7 @@ class Connection(object):
     def _cleanup(self, _anyway=True):
         if self._closed and not _anyway:
             return
-        self._closed = True
+        self._closed = True            #<--- Should i not call the above?!!!!!!!!!!!!!!!!!!!!!!!
         self._channel.close()
         self._local_root.on_disconnect()
         self._sync_replies.clear()
@@ -213,13 +421,21 @@ class Connection(object):
     def __del__(self):
         self.close()
     
-    #---
-    #Context manger
-    #---
+    #------------------------------------------------------
+    #  fileno: to make it compatable with select
+    #------------------------------------------------------
+    
+    def fileno(self):
+        """Need this to allow this object to be select able"""
+        return self._channel.fileno()
+    
+    #------------------------------------------------------
+    # Context manger: to make it compatable with with
+    #------------------------------------------------------
     def __enter__(self):
         """Context manager:: __enter__
         
-        with Connection(...) as the_con:
+        with Connection(...) as the_connection:
             do stuff....
         """
         return self
@@ -245,10 +461,10 @@ class Connection(object):
             # An exception occured
             pass
             #return True to catch the error
-            #return False to let them go, or implictly return None
+            #return False to let them go, or just do nothing and implictly return None
     
     #------------------------------------------------------
-    #  Representation 
+    #  Representation
     #------------------------------------------------------    
     
     def __repr__(self):
@@ -259,104 +475,65 @@ class Connection(object):
     #  IO 
     #------------------------------------------------------
     
-    @property
-    def closed(self):
-        """returns status of connection object"""
-        return self._closed
-
-    def fileno(self):
-        return self._channel.fileno()
-    
     def ping(self, data="the world is a vampire!" * 20, timeout=3):
         """assert that the other party is functioning properly"""
         res = self.async_request(global_consts.HANDLE_PING, data, timeout=timeout)
         if res.value != data:
             raise Protocol_Ping_Exception("echo mismatches sent data")
     
-    def _send(self, msg, seq, args):
-        data = brine.dump((msg, seq, args))
+    def _send(self, msg_type, seq_num, msg):
+        data = brine.dump((msg_type, seq_num, msg))
         self._sendlock.acquire()
         try:
             self._channel.send(data)
+        except Exception: #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            raise
         finally:
             self._sendlock.release()
-
+    
     def _send_request(self, handler, args):
-        seq = self._seqcounter.next()
-        self._send(global_consts.MSG_REQUEST, seq, (handler, self._box(args)))
+        seq_num = self._seqcounter.next()
+        self._send(global_consts.MSG_REQUEST, seq_num, (handler, self._box(args)))
         return seq
-
-    def _send_reply(self, seq, obj):
-        self._send(global_consts.MSG_REPLY, seq, self._box(obj))
-
-    def _send_exception(self, seq, exctype, excval, exctb):
-        exc = vinegar.dump(exctype, excval, exctb, 
-            include_local_traceback=self._config["include_local_traceback"])
-        self._send(global_consts.MSG_EXCEPTION, seq, exc)
+    
+    def _send_reply(self, seq_num, obj):
+        self._send(global_consts.MSG_REPLY, seq_num, self._box(obj))
+    
+    def _send_exception(self, seq_num, exctype, excval, exctb):
+        option_include_traceback = self._config["include_local_traceback"]
+        exception_dump = vinegar.dump(exctype, excval, exctb, option_include_traceback)
+        self._send(global_consts.MSG_EXCEPTION, seq_num, exception_dump)
     
     #------------------------------------------------------
-    # Boxing
-    #  In python everything is an object! and thus everything supports id and type
+    #  Requests
     #------------------------------------------------------
-    def _box(self, obj):                  # Might be nice to have *obj
-        """store a local object in such a way that it could be recreated on
-        the remote party either by-value or by-reference"""
-        if brine.dumpable(obj):
-            return global_consts.LABEL_IMMUTABLE, obj
-        
-        elif type(obj) is tuple:
-            return global_consts.LABEL_MUT_TUPLE, tuple(self._box(item) for item in obj)
-        
-        elif isinstance(obj, netref.BaseNetref) and obj.____conn__() is self:
-            return global_consts.LABEL_EXISTING_PROXY, obj.____oid__
-        
+    def sync_request(self, handler, *args):
+        """send a request and wait for the reply to arrive"""
+        seq = self._send_request(handler, args)
+        while seq not in self._sync_replies:
+            self.serve(0.1)
+        isexc, obj = self._sync_replies.pop(seq)
+        if isexc:
+            print("dunno here")
+            raise obj
         else:
-            self._local_objects.add(obj)
-            cls = getattr(obj, "__class__", type(obj))
-            return global_consts.LABEL_NEW_PROXY, (id(obj), cls.__name__, cls.__module__)
-        
-        # Should I check if obj in _local_objects, or empty it sometimes
-        
-        # inspect.getmodule (maybe this is better)
-        # If can't get name or module what to do???
+            return obj
     
-    def _unbox(self, package):
-        """recreate a local object representation of the remote object: if the
-        object is passed by value, just return it; if the object is passed by
-        reference, create a netref to it"""
-        label, value = package
-        
-        if label == global_consts.LABEL_IMMUTABLE:
-            return value
-        
-        elif label == global_consts.LABEL_MUT_TUPLE:
-            return tuple(self._unbox(item) for item in value)
-        
-        elif label == global_consts.LABEL_EXISTING_PROXY:
-            return self._local_objects[value]
-        
-        elif label == global_consts.LABEL_NEW_PROXY:
-            oid, clsname, modname = value
-            if oid in self._proxy_cache:
-                return self._proxy_cache[oid]
-            proxy = self._netref_factory(oid, clsname, modname)
-            self._proxy_cache[oid] = proxy
-            return proxy
-        
-        else:
-            raise Protocol_Unbox_Exception("Couldn't unbox, invalid label={label}".format(label=label))
+    def _async_request(self, handler, args=(), callback=(lambda a, b: None)):
+        seq = self._send_request(handler, args)
+        self._async_callbacks[seq] = callback
     
-    def _netref_factory(self, oid, clsname, modname):
-        typeinfo = (clsname, modname)
-        if typeinfo in self._netref_classes_cache:
-            cls = self._netref_classes_cache[typeinfo]
-        elif typeinfo in netref.builtin_classes_cache:
-            cls = netref.builtin_classes_cache[typeinfo]
-        else:
-            info = self.sync_request(global_consts.HANDLE_INSPECT, oid)
-            cls = netref.class_factory(clsname, modname, info)
-            self._netref_classes_cache[typeinfo] = cls
-        return cls(weakref.ref(self), oid)
+    def async_request(self, handler, *args, **kwargs):
+        """send a request and return an AsyncResult object, which will 
+        eventually hold the reply"""
+        timeout = kwargs.pop("timeout", None)
+        if kwargs:
+            raise TypeError("got unexpected keyword argument %r" % (kwargs.keys()[0],))
+        res = AsyncResult(weakref.proxy(self))
+        self._async_request(handler, args, res)
+        if timeout is not None:
+            res.set_expiry(timeout)
+        return res
     
     #------------------------------------------------------
     #  Dispatching
@@ -411,7 +588,7 @@ class Connection(object):
         finally:
             self._recvlock.release()
         return data
-        
+    
     def _dispatch(self, data):
         msg, seq, args = brine.load(data)
         if msg == global_consts.MSG_REQUEST:
@@ -422,7 +599,7 @@ class Connection(object):
             self._dispatch_exception(seq, args)
         else:
             raise ValueError("invalid message type: %r" % (msg,))
-
+    
     def poll(self, timeout=0):
         """serve a single transaction, should one arrives in the given 
         interval. note that handling a request/reply may trigger nested 
@@ -464,7 +641,7 @@ class Connection(object):
     def poll_all(self, timeout=0):
         """serve all requests and replies that arrive within the given 
         interval. returns True if at least one was served, False otherwise"""
-
+        
         at_least_once = False
         try:
             while self.poll(timeout):
@@ -473,43 +650,6 @@ class Connection(object):
             pass
         return at_least_once
     
-    #------------------------------------------------------
-    #  Requests
-    #------------------------------------------------------
-    def sync_request(self, handler, *args):
-        """send a request and wait for the reply to arrive"""
-        seq = self._send_request(handler, args)
-        while seq not in self._sync_replies:
-            self.serve(0.1)
-        isexc, obj = self._sync_replies.pop(seq)
-        if isexc:
-            print("dunno here")
-            raise obj
-        else:
-            return obj
-    
-    def _async_request(self, handler, args=(), callback=(lambda a, b: None)):
-        seq = self._send_request(handler, args)
-        self._async_callbacks[seq] = callback
-
-    def async_request(self, handler, *args, **kwargs):
-        """send a request and return an AsyncResult object, which will 
-        eventually hold the reply"""
-        timeout = kwargs.pop("timeout", None)
-        if kwargs:
-            raise TypeError("got unexpected keyword argument %r" % (kwargs.keys()[0],))
-        res = AsyncResult(weakref.proxy(self))
-        self._async_request(handler, args, res)
-        if timeout is not None:
-            res.set_expiry(timeout)
-        return res
-    
-    @property
-    def root(self):
-        """fetch the root object of the other party"""
-        if self._remote_root is None:
-            self._remote_root = self.sync_request(global_consts.HANDLE_GETROOT)
-        return self._remote_root
     
     #------------------------------------------------------
     #  Attribute access
@@ -560,7 +700,7 @@ class Connection(object):
     
     @register_handler(global_consts.HANDLE_DEL, _HANDLERS)
     def _handle_del(self, oid):
-        self._local_objects.decref(oid)
+        self._local_objects.do_nothing_place_holder(oid)   #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
     @register_handler(global_consts.HANDLE_REPR, _HANDLERS)
     def _handle_repr(self, oid):
