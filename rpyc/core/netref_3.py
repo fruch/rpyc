@@ -365,7 +365,8 @@ _normalized_builtin_types = dict( ((typ.__name__, typ.__module__), typ) for typ 
 # RENAME!!!!!!!!!!!!   remote_type_dict
 builtin_classes_cache = {}
 for cls in _builtin_types:
-    builtin_classes_cache[cls.__name__, cls.__module__] = class_factory(
+    typeinfo = (cls.__name__, cls.__module__)
+    builtin_classes_cache[typeinfo] = class_factory(
                         cls.__name__, cls.__module__, inspect_methods(cls))
 
 #Inspect methods is the class namespace

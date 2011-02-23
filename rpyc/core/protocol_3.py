@@ -47,7 +47,7 @@ The protocol object can be configured using the config dict, with the following 
 #   Attributes 
 #------------------------------------------------------------------------
 allow_safe_attrs                bool     True          whether to allow attribute access to safe attributes 
-safe_attrs set                  …                      a set of attribute names considered safe (i.e., __iter__, __mul__, etc.) 
+safe_attrs                      set      …             a set of attribute names considered safe (i.e., __iter__, __mul__, etc.) 
 allow_exposed_attrs             bool     True          whether to allow access to attributes beginning with a well-defined prefix 
 exposed_prefix                  str     "exposed_"     the prefix of exposed attributes 
 allow_public_attrs              bool     False         whether to allow access to public attributes (name does not begin with '_') 
@@ -82,7 +82,7 @@ import sys
 import select
 import weakref
 import itertools
-import pickle
+#import pickle
 from threading import Lock
 from collections import namedtuple
 
@@ -121,27 +121,7 @@ class Protocol_Unbox_Exception(Protocol_Exception):
         super().__init__(err_string)
 
 #==============================================================
-# Default Config
-#==============================================================
-#
-# allow_safe_attrs
-# allow_exposed_attrs
-# allow_public_attrs
-# allow_all_attrs
-# safe_attrs
-# exposed_prefix
-# allow_getattr
-# allow_setattr
-# allow_delattr
-# include_local_traceback
-# instantiate_custom_exceptions
-# import_custom_exceptions
-# instantiate_oldstyle_exceptions
-# propagate_SystemExit_locally
-# allow_pickle
-# connid
-# credentials
-# 
+#  Default configuaration
 #==============================================================
 
 DEFAULT_CONFIG = dict(
@@ -182,14 +162,16 @@ DEFAULT_CONFIG = dict(
     )
 
 #==============================================================
-# Main program
+#  Misc utils
 #==============================================================
 
 class register_handler(object):
-    """This decorator is used to register the handlers in the _HANDLER dict in Connection
+    """This decorator is used to register the handlers with the Connection _HANDLER class attr dict
+    It leaves the method unchanged after registering it.
     
-    handler_constant is a number
+    handler_constant is a number that uniquely ids a particular functionality
     handler register is dictionary like object
+    
     register[handler_const] = handler_func"""
     def __init__(self, handler_constant, handler_register):
         self.handler_constant = handler_constant
@@ -199,33 +181,39 @@ class register_handler(object):
         self.handler_register[self.handler_constant] = handler_method
         return handler_method
 
+#==============================================================
+# Main program
+#==============================================================
+
 class Connection(object):
     """The RPyC connection (also know as the RPyC protocol). 
+    
+    __init__(self, service, channel, config = {}, _lazy = False)
+    
     * service: the service to expose
     * channel: the channcel over which messages are passed
     * config: this connection's config dict (overriding parameters from the 
-      default config dict)
+      default = DEFAULT_CONFIG)
     * _lazy: whether or not to initialize the service with the creation of the
-      connection. default is True. if set to False, you will need to call
+      connection. initiaslise service, default is True. if set to False, you will need to call
       _init_service manually later
+    
+    Some attrs
+    
+    _local_objects   = objs added when boxing something mutable for the first time.
+                            {oid: obj} dictionary, native objects to native object ids
+    
+    _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
+                        {oid: weakref(obj, callback)} 
+    
+    _netref_classes_cache = # Dictionary of known classes, {(clsname, modname): cls}
+    
     """
     _connection_id_generator = itertools.count(1)
     _HANDLERS = {}
     packer = namedtuple("package", "label, contents")
     
     def __init__(self, service, channel, config = {}, _lazy = False):
-        """
-        _closed = bool status of connection, access through a property
-        _config = Settings for the connection, default = DEFAULT_CONFIG
-        
-        _local_objects   = added to when boxing something new and mutable
-                            {oid: obj} dictionary, native objects to native object ids
-        
-        _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
-                        {oid: weakref(obj, callback)} 
-        _lazy = initiaslise service
-        
-        """
         #  Close the connection while we set it up
         self._closed = True
         
@@ -236,15 +224,16 @@ class Connection(object):
             self._config["connid"] = "conn{conn_id}".format(conn_id=_connection_id_generator.__next__())
         
         self._channel = channel
-        self._remote_root = None
+        
         self._local_root = service(weakref.proxy(self))
+        self._remote_root = None
         
-        self._local_objects = Locking_dict()        # {oid: obj} dictionary, native objects to native object ids
-        self._proxy_cache = WeakValueDictionary()   # Dunno??????????????????????????
+        self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, native objects to native object ids
+        self._proxy_cache = WeakValueDictionary()   # {oid: proxy_obj} oid to proxy objects not owned by this connection
         
-        self._seqcounter = itertools.count()
+        self._netref_classes_cache = {}             # classes that have been??????
         
-        self._netref_classes_cache = {}
+        self._seqcounter = itertools.count()        # With this we will generate the msg seq numbers
         
         self._recvlock = Lock()
         self._sendlock = Lock()
@@ -254,7 +243,7 @@ class Connection(object):
         
         self._last_traceback = None
         
-        if not _lazy:
+        if not _lazy:                               # Should object automatically be set to go
             self._init_service()
         
         # Open this connection as we have finished setting it up
@@ -265,16 +254,12 @@ class Connection(object):
     #------------------------------------------------------
     
     @property
-    def closed(self):
-        """returns status of connection object"""
-        # Why does this need to be a property?  Read only access? But who protects _closed? and surely it should at least be __closed private:)
-        # Why not just a get_status simple function?????????????????????????????????????????????????????????????????????????????
-        return self._closed
-    
-    @property
     def root(self):
-        # Check this is correct one argument to sync request
-        """fetch the root object of the other party"""
+        # Check this is correct one argument to sync request!!!!!!!!!!!!!!!!!!!!!!!
+        # I don't like the name of this as there are remote and local roots lying around!!!!!!!!!!!!!!!!!!!!!!!!!!
+        """fetch the root object of the other party
+        
+        This is used to access the root of the remote system, its service stuff"""
         if self._remote_root is None:
             self._remote_root = self.sync_request(global_consts.HANDLE_GETROOT)
         return self._remote_root
@@ -343,8 +328,7 @@ class Connection(object):
             try:
                 existing_proxy = self._local_objects[oid]
             except KeyError:
-                print("labeled as native but I know nothing of this proxy")
-                raise
+                raise Protocol_Unbox_Exception("labeled as native but I know nothing of this proxy")
             return existing_proxy
         
         elif label == global_consts.LABEL_NEW_PROXY:
@@ -374,6 +358,7 @@ class Connection(object):
     #------------------------------------------------------
     #  Startup
     #------------------------------------------------------
+    
     def _init_service(self):
         """Dunno """ #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # Seem to be a weak proxy to the service
@@ -382,6 +367,7 @@ class Connection(object):
     #------------------------------------------------------
     #  Shutdown, cleanup and __del__
     #------------------------------------------------------
+    
     def close(self, _catchall=True):
         if self._closed:
             return
@@ -432,6 +418,7 @@ class Connection(object):
     #------------------------------------------------------
     # Context manger: to make it compatable with with
     #------------------------------------------------------
+    
     def __enter__(self):
         """Context manager:: __enter__
         
@@ -476,7 +463,9 @@ class Connection(object):
     #------------------------------------------------------
     
     def ping(self, data="the world is a vampire!" * 20, timeout=3):
-        """assert that the other party is functioning properly"""
+        """assert that the other party is functioning properly
+        
+        Interesting choice of default data: 'the world is a vampire'"""
         res = self.async_request(global_consts.HANDLE_PING, data, timeout=timeout)
         if res.value != data:
             raise Protocol_Ping_Exception("echo mismatches sent data")
@@ -494,7 +483,7 @@ class Connection(object):
     def _send_request(self, handler, args):
         seq_num = self._seqcounter.next()
         self._send(global_consts.MSG_REQUEST, seq_num, (handler, self._box(args)))
-        return seq
+        return seq_num
     
     def _send_reply(self, seq_num, obj):
         self._send(global_consts.MSG_REPLY, seq_num, self._box(obj))
@@ -507,6 +496,7 @@ class Connection(object):
     #------------------------------------------------------
     #  Requests
     #------------------------------------------------------
+    
     def sync_request(self, handler, *args):
         """send a request and wait for the reply to arrive"""
         seq = self._send_request(handler, args)
@@ -538,6 +528,7 @@ class Connection(object):
     #------------------------------------------------------
     #  Dispatching
     #------------------------------------------------------
+    
     def _dispatch_request(self, seq, raw_args):
         try:
             handler, args = raw_args
@@ -574,6 +565,7 @@ class Connection(object):
     #------------------------------------------------------
     #  Serving
     #------------------------------------------------------
+    
     def _recv(self, timeout, wait_for_lock):
         if not self._recvlock.acquire(wait_for_lock):
             return None
@@ -606,7 +598,7 @@ class Connection(object):
         requests, which are all part of the transaction.
         
         returns True if one was served, False otherwise"""
-        data = self._recv(timeout, wait_for_lock=False)
+        data = self._recv(timeout, wait_for_lock=False)   # wait for lock not used !!!!!!!!!!!!!!!!!!!!
         if not data:
             return False
         self._dispatch(data)
@@ -619,7 +611,7 @@ class Connection(object):
         reentrant. returns True if a request or reply were received, False 
         otherwise."""
         
-        data = self._recv(timeout, wait_for_lock=True)
+        data = self._recv(timeout, wait_for_lock=True)     # wait_for_lock not used!!!!!!!!!!!!!!!!!!
         if not data:
             return False
         self._dispatch(data)
@@ -631,7 +623,7 @@ class Connection(object):
             while True:
                 self.serve(0.1)
         except select.error:
-            if not self.closed:
+            if not self._closed:
                 raise
         except EOFError:
             pass
@@ -650,10 +642,10 @@ class Connection(object):
             pass
         return at_least_once
     
-    
     #------------------------------------------------------
     #  Attribute access
     #------------------------------------------------------
+    
     def _check_attr(self, obj, name):
         if self._config["allow_exposed_attrs"]:
             if name.startswith(self._config["exposed_prefix"]):
@@ -686,8 +678,10 @@ class Connection(object):
     #------------------------------------------------------
     #  Handlers
     #------------------------------------------------------
+    
     @register_handler(global_consts.HANDLE_PING, _HANDLERS)
     def _handle_ping(self, data):
+        """Return what ever was sent, echo"""
         return data
     
     @register_handler(global_consts.HANDLE_CLOSE, _HANDLERS)
@@ -700,19 +694,29 @@ class Connection(object):
     
     @register_handler(global_consts.HANDLE_DEL, _HANDLERS)
     def _handle_del(self, oid):
+        """ This used to be decref to thing, but I couldn't 
+        see where that was used. Now just a do nothing pass function"""
         self._local_objects.do_nothing_place_holder(oid)   #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
     @register_handler(global_consts.HANDLE_REPR, _HANDLERS)
     def _handle_repr(self, oid):
+        """return repr of a local object
+        
+        looks up oid in self._local_objects of connection instance 
+        which returns up the obj then we passes that obj to
+        repr and returns the result"""
         return repr(self._local_objects[oid])
     
     @register_handler(global_consts.HANDLE_STR, _HANDLERS)
     def _handle_str(self, oid):
+        """return str of a local object
+        
+        looks up oid in self._local_objects of connection instance"""
         return str(self._local_objects[oid])
     
     @register_handler(global_consts.HANDLE_CMP, _HANDLERS)
     def _handle_cmp(self, oid, other):
-        # cmp() might enter recursive resonance... yet another workaround
+        # cmp() might enter recursive resonance... yet another workaround !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #return cmp(self._local_objects[oid], other)
         obj = self._local_objects[oid]
         try:
@@ -722,47 +726,74 @@ class Connection(object):
     
     @register_handler(global_consts.HANDLE_HASH, _HANDLERS)
     def _handle_hash(self, oid):
+        """return hash of a local object
+        
+        looks up oid in self._local_objects of connection instance"""
         return hash(self._local_objects[oid])
     
     @register_handler(global_consts.HANDLE_CALL, _HANDLERS)
     def _handle_call(self, oid, args, kwargs):
+        """call an object with given arguments
+        
+        looks up oid in self._local_objects of connection instance and
+        calls it with the passed args and kwargs."""
         return self._local_objects[oid](*args, **dict(kwargs))
     
     @register_handler(global_consts.HANDLE_DIR, _HANDLERS)
     def _handle_dir(self, oid):
+        """ call dir on local object specifed but its oid
+        
+        looks up oid in self._local_objects and passes that object to dir.
+        returns a tuple as that is immuatble and thus can be brined"""
         return tuple(dir(self._local_objects[oid]))
     
     @register_handler(global_consts.HANDLE_INSPECT, _HANDLERS)
     def _handle_inspect(self, oid):
+        # inspect methods is a weird function doesn't return all methods just some that arn't builtins
+        """Used for returning the methods needed to build new proxy classes here"""
         return tuple(netref.inspect_methods(self._local_objects[oid]))
     
     @register_handler(global_consts.HANDLE_GETATTR, _HANDLERS)
     def _handle_getattr(self, oid, name):
-        return self._access_attr(oid, name, (), "_rpyc_getattr", 
-                                 "allow_getattr", getattr)
+        """
+        """
+        return self._access_attr(oid, name, (), "_rpyc_getattr", "allow_getattr", getattr)
     
     @register_handler(global_consts.HANDLE_DELATTR, _HANDLERS)
     def _handle_delattr(self, oid, name):
-        return self._access_attr(oid, name, (), "_rpyc_delattr", 
-                                 "allow_delattr", delattr)
+        """
+        """
+        return self._access_attr(oid, name, (), "_rpyc_delattr", "allow_delattr", delattr)
     
     @register_handler(global_consts.HANDLE_SETATTR, _HANDLERS)
     def _handle_setattr(self, oid, name, value):
-        return self._access_attr(oid, name, (value,), "_rpyc_setattr", 
-                                 "allow_setattr", setattr)
+        """
+        """
+        return self._access_attr(oid, name, (value,), "_rpyc_setattr", "allow_setattr", setattr)
     
     @register_handler(global_consts.HANDLE_CALLATTR, _HANDLERS)
     def _handle_callattr(self, oid, name, args, kwargs):
+        """call an objects method and return the result
+        
+        looks up oid in self._local_objects and passes the resulting obj.
+        with this obj call gettatr and pass the resulting arguments"""
+        #Scarey bickeys kwards is objects?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         return self._handle_getattr(oid, name)(*args, **dict(kwargs))
     
     @register_handler(global_consts.HANDLE_PICKLE, _HANDLERS)
     def _handle_pickle(self, oid, proto):
+        #How do we guarentee consistant protcol here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        """
+        """
         if not self._config["allow_pickle"]: 
             raise ValueError("pickling is disabled")
-        return pickle.dumps(self._local_objects[oid], proto)
+        return brine._pickle(self._local_objects[oid], proto)
+        #Check for picker exception here
     
     @register_handler(global_consts.HANDLE_BUFFITER, _HANDLERS)
     def _handle_buffiter(self, oid, count):
+        """
+        """
         items = []
         obj = self._local_objects[oid]
         for i in xrange(count):

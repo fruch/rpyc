@@ -6,9 +6,13 @@ we deliberately add \\n at the end of each frame.
 
 note: unlike previous versions, this is no longer thread safe
 """
-import zlib # Check zlib is ok.
+import zlib # Check zlib is ok.       # What if zlib is not avavible on just one machine?
 
 from rpyc.lib.compatibility import Struct
+
+#Now hace a bytes class instead of string in python 3.
+
+COMPRESS_DEFAULT = True
 
 # * 64 bit length field?
 # * separate \n into a FlushingChannel subclass?
@@ -22,7 +26,7 @@ class Channel(object):
     FRAME_HEADER = Struct("!LB")
     FLUSHER = "\n" # cause any line-buffered layers below us to flush
     
-    def __init__(self, stream, compress=True):
+    def __init__(self, stream, compress=COMPRESS_DEFAULT):
         self.stream = stream
         self.compress = compress
     
@@ -34,6 +38,7 @@ class Channel(object):
         return self.stream.closed
     
     def fileno(self):
+        """so supports select, file like"""
         return self.stream.fileno()
     
     def poll(self, timeout):

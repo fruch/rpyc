@@ -97,9 +97,9 @@ def _other_err():
 # Underbelly
 #==============================================================================
 
-def _pickle(obj):
+def _pickle(obj, protocol = _pickler.HIGHEST_PROTOCOL):
     try:
-        data = _pickler.dumps(obj, protocol = _pickler.HIGHEST_PROTOCOL)
+        data = _pickler.dumps(obj, protocol)
     except _pickler.PicklingError:
         _not_pickleable_err(obj)
     return data
