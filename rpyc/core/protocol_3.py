@@ -5,15 +5,15 @@ The Connection class implements the RPyC protocol itself.
 
 ################
 #
-# Connection
+# Connection: represents the connection to another service, lets us send and recv data
 #
 ################
 
 The constructor of Connection takes the following parameters:
 
-service - the service class which this side of the connection exposes. The service class is instantiated and initialized in the constructor. 
-channel - the channel object on which this connection operates 
-config  - the config dict (by default {}, which means the default config is used) 
+service  : the service class which this side of the connection exposes. The service class is instantiated and initialized in the constructor. 
+channel  : the channel object on which this connection operates 
+config   : the config dict (by default {}, which means the default config is used) 
 
 #-------------
 #
@@ -49,7 +49,7 @@ The protocol object can be configured using the config dict, with the following 
 allow_safe_attrs                bool     True          whether to allow attribute access to safe attributes 
 safe_attrs                      set      …             a set of attribute names considered safe (i.e., __iter__, __mul__, etc.) 
 allow_exposed_attrs             bool     True          whether to allow access to attributes beginning with a well-defined prefix 
-exposed_prefix                  str     "exposed_"     the prefix of exposed attributes 
+exposed_prefix                  str      "exposed_"    the prefix of exposed attributes 
 allow_public_attrs              bool     False         whether to allow access to public attributes (name does not begin with '_') 
 allow_all_attrs                 bool     False         whether to allow access to all attributes (including special and private) 
 #------------------------------------------------------------------------
@@ -86,7 +86,7 @@ import itertools
 from threading import Lock
 from collections import namedtuple
 
-from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # DOn't understand why locking and why weak
+from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # Don't understand why locking and why weak
 
 import brine_3 as brine
 import vinegar_3 as vinegar
@@ -100,7 +100,7 @@ import global_consts
 #==============================================================
 
 class Protocol_Exception(Rpyc_Exception):
-    """Class of errors for the Vinegar module
+    """Class of errors for the Protocol module
     
     This class of exceptions is used for errors that occur
     when dealing with the encoding, passing, and decoding of errors.
@@ -121,7 +121,7 @@ class Protocol_Unbox_Exception(Protocol_Exception):
         super().__init__(err_string)
 
 #==============================================================
-#  Default configuaration
+#  Default configuration
 #==============================================================
 
 DEFAULT_CONFIG = dict(
@@ -200,18 +200,16 @@ class Connection(object):
     
     Some attrs
     
-    _local_objects   = objs added when boxing something mutable for the first time.
+    * _local_objects   = objs added when boxing something mutable for the first time.
                             {oid: obj} dictionary, native objects to native object ids
-    
-    _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
+    * _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
                         {oid: weakref(obj, callback)} 
-    
-    _netref_classes_cache = # Dictionary of known classes, {(clsname, modname): cls}
+    * _netref_classes_cache = # Dictionary of known classes, {(clsname, modname): cls}
     
     """
     _connection_id_generator = itertools.count(1)
-    _HANDLERS = {}
-    packer = namedtuple("package", "label, contents")
+    _HANDLERS = {}                                               # functionailty specfic handlers
+    packer = namedtuple("package", "label, contents")            # Used for boxing and unboxing
     
     def __init__(self, service, channel, config = {}, _lazy = False):
         #  Close the connection while we set it up
@@ -221,11 +219,11 @@ class Connection(object):
         self._config = DEFAULT_CONFIG.copy()
         self._config.update(config)
         if self._config["connid"] is None:
-            self._config["connid"] = "conn{conn_id}".format(conn_id=_connection_id_generator.__next__())
+            self._config["connid"] = "conn{conn_id}".format(conn_id=self._connection_id_generator.__next__())
         
         self._channel = channel
         
-        self._local_root = service(weakref.proxy(self))
+        self._local_root = service(weakref.proxy(self))     # Why does this have to be weak
         self._remote_root = None
         
         self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, native objects to native object ids
@@ -256,10 +254,12 @@ class Connection(object):
     @property
     def root(self):
         # Check this is correct one argument to sync request!!!!!!!!!!!!!!!!!!!!!!!
-        # I don't like the name of this as there are remote and local roots lying around!!!!!!!!!!!!!!!!!!!!!!!!!!
         """fetch the root object of the other party
         
-        This is used to access the root of the remote system, its service stuff"""
+        This is used to access the root of the remote system, its service stuff.
+        
+        So if me make a connection it is actually two connections connected each with a service, we
+        use the_Connection.root to gain access to the service we connected to"""
         if self._remote_root is None:
             self._remote_root = self.sync_request(global_consts.HANDLE_GETROOT)
         return self._remote_root
@@ -270,32 +270,30 @@ class Connection(object):
     #------------------------------------------------------
     
     def _box(self, obj):                  # Might be nice to have *obj
-        """label and store a local object in such a way that it could be recreated on
+        """label and store a local object in such a way that it can be send and unboxed
         the remote party either by-value or by-reference
         
-        returns package = named_tuple(label, contents)        :for some labels, contents may be a tuple
+        returns package
+        package = named_tuple(label, contents)        :for some labels, contents may be a tuple
         """
-        
-        # Looks more like label an object, and make it suitable for encoding/decoding
-        
-        # Make it symetrical, so yields a package
-        
         if brine.dumpable(obj):
-            package = Connection.packer(label=global_consts.LABEL_IMMUTABLE, contents=obj)
+            package = self.packer(label=global_consts.LABEL_IMMUTABLE, contents=obj)
         
         elif type(obj) is tuple:
-            package = Connection.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
+            package = self.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
         
         elif isinstance(obj, netref.BaseNetref) and obj.____conn__() is self:   #This one detects local proxy objects
-            package = Connection.packer(label=global_consts.LABEL_EXISTING_PROXY, contents=obj.____oid__)
+            print("using the third way in _box, detected local proxy object, wow, how did this come to be")
+            package = self.packer(label=global_consts.LABEL_EXISTING_PROXY, contents=obj.____oid__)
         # If detected local on box A, can the label be local on box B?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # I think above might be wrong, must come back and check when have a fuller understanding
+        # Snake eating it's own tail, arbourous or something.
         
         else:
             oid = id(obj)   #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             self._local_objects[oid] = obj  #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             cls = getattr(obj, "__class__", type(obj))
-            package = Connection.packer(label=global_consts.LABEL_NEW_PROXY, contents=(oid, cls.__name__, cls.__module__))
+            package = self.packer(label=global_consts.LABEL_NEW_PROXY, contents=(oid, cls.__name__, cls.__module__))
         
         return package
         
@@ -320,21 +318,25 @@ class Connection(object):
             return obj
         
         elif label == global_consts.LABEL_MUT_TUPLE:
-            mut_tuple = tuple(self._unbox(item) for item in contents)
+            mut_tuple = tuple(self._unbox(sub_package) for sub_package in contents)
             return mut_tuple
         
         elif label == global_consts.LABEL_EXISTING_PROXY:       # Needs some thought###################
             oid = contents
+            
             try:
-                existing_proxy = self._local_objects[oid]
+                native_object = self._local_objects[oid]
             except KeyError:
-                raise Protocol_Unbox_Exception("labeled as native but I know nothing of this proxy")
-            return existing_proxy
+                raise Protocol_Unbox_Exception("labeled as local but I know nothing of this proxy")
+            
+            return native_object
         
         elif label == global_consts.LABEL_NEW_PROXY:
             oid, clsname, modname = contents
+            
             if oid in self._proxy_cache:
                 return self._proxy_cache[oid]
+            
             proxy = self._netref_factory(oid, clsname, modname)
             self._proxy_cache[oid] = proxy
             return proxy
@@ -343,8 +345,14 @@ class Connection(object):
             raise Protocol_Unbox_Exception("Couldn't unbox, invalid label={label}".format(label=label))
     
     def _netref_factory(self, oid, clsname, modname):
-        #Check this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        """ creation of proxy objects, we call netrefs
+        
+        First creates and instance of the proxy to act as the function or 
+        object or class or metaclass 
+        using the proxy instance creater BaseNetref
+        then creates an instance of this and sets it's ___oid__ and ___conn__"""
         typeinfo = (clsname, modname)
+        
         if typeinfo in self._netref_classes_cache:
             cls = self._netref_classes_cache[typeinfo]
         elif typeinfo in netref.builtin_classes_cache:
@@ -353,7 +361,9 @@ class Connection(object):
             info = self.sync_request(global_consts.HANDLE_INSPECT, oid)
             cls = netref.class_factory(clsname, modname, info)
             self._netref_classes_cache[typeinfo] = cls
-        return cls(weakref.ref(self), oid)
+        
+        netref_instance = cls(conn=weakref.ref(self), oid=oid)
+        return netref_instance    #Here ___con__ and ___oid__ are set
     
     #------------------------------------------------------
     #  Startup
@@ -665,8 +675,16 @@ class Connection(object):
     def _access_attr(self, oid, name, args, overrider, param, default):
         if type(name) is not str:
             raise TypeError("attr name must be a string")
+        
         obj = self._local_objects[oid]
-        accessor = getattr(type(obj), overrider, None)
+        
+        #What is the purpose of the overrider
+        
+        #Rewirte this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
+        #Here we get the attr
+        accessor = getattr(type(obj), overrider, None)  #getattr(object, name[, default])
+        
         if accessor is None:
             name2 = self._check_attr(obj, name)
             if not self._config[param] or not name2:
