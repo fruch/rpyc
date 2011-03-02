@@ -85,6 +85,7 @@ import itertools
 #import pickle
 from threading import Lock
 from collections import namedtuple
+from copy import deepcopy
 
 from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # Don't understand why locking and why weak
 
@@ -191,21 +192,22 @@ class Connection(object):
     __init__(self, service, channel, config = {}, _lazy = False)
     
     * service: the service to expose
-    * channel: the channcel over which messages are passed
+    * channel: the channel over which messages are passed
     * config: this connection's config dict (overriding parameters from the 
-      default = DEFAULT_CONFIG)
+          default = DEFAULT_CONFIG)
     * _lazy: whether or not to initialize the service with the creation of the
-      connection. initiaslise service, default is True. if set to False, you will need to call
-      _init_service manually later
+          connection. initiaslise service, default is True. if set to False, you will need to call
+          _init_service manually later
     
-    Some attrs
+    Important holders
     
-    * _local_objects   = objs added when boxing something mutable for the first time.
-                            {oid: obj} dictionary, native objects to native object ids
-    * _proxy_cache = # Added to when making a new proxy after unboxing data, tagged as new
-                        {oid: weakref(obj, callback)} 
-    * _netref_classes_cache = # Dictionary of known classes, {(clsname, modname): cls}
-    
+    * _local_objects            # native objs added when boxing something mutable for the first time.
+                                    {oid: obj} dictionary, native object ids to the full native object
+    * _proxy_cache              # Added to when making a new proxies after unboxing data, tagged as new
+                                    {oid: weakref(obj, callback)} 
+    * _netref_classes_cache     # Dictionary of previously created proxy classes, 
+                                    {(clsname, modname): cls}
+     # netref.builtin_classes_cache    # pre created proxy class for builtins
     """
     _connection_id_generator = itertools.count(1)
     _HANDLERS = {}                                               # functionailty specfic handlers
@@ -216,7 +218,7 @@ class Connection(object):
         self._closed = True
         
         #  Setup the config
-        self._config = DEFAULT_CONFIG.copy()
+        self._config = deepcopy(DEFAULT_CONFIG)
         self._config.update(config)
         if self._config["connid"] is None:
             self._config["connid"] = "conn{conn_id}".format(conn_id=self._connection_id_generator.__next__())
@@ -226,10 +228,10 @@ class Connection(object):
         self._local_root = service(weakref.proxy(self))     # Why does this have to be weak
         self._remote_root = None
         
-        self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, native objects to native object ids
+        self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, orginal objects to object ids
         self._proxy_cache = WeakValueDictionary()   # {oid: proxy_obj} oid to proxy objects not owned by this connection
-        
         self._netref_classes_cache = {}             # classes that have been??????
+        self._netref_builtin_classes = netref.builtin_classes_cache  # Already created in netref
         
         self._seqcounter = itertools.count()        # With this we will generate the msg seq numbers
         
@@ -270,7 +272,7 @@ class Connection(object):
     #------------------------------------------------------
     
     def _box(self, obj):                  # Might be nice to have *obj
-        """label and store a local object in such a way that it can be send and unboxed
+        """label and store a local object in such a way that it can be sent and unboxed
         the remote party either by-value or by-reference
         
         returns package
@@ -283,34 +285,30 @@ class Connection(object):
             package = self.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
         
         elif isinstance(obj, netref.BaseNetref) and obj.____conn__() is self:   #This one detects local proxy objects
+            package = self.packer(label=global_consts.LABEL_LOCAL_OBJECT_REF, contents=obj.____oid__)
+            
             print("using the third way in _box, detected local proxy object, wow, how did this come to be")
-            package = self.packer(label=global_consts.LABEL_EXISTING_PROXY, contents=obj.____oid__)
-        # If detected local on box A, can the label be local on box B?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # I think above might be wrong, must come back and check when have a fuller understanding
-        # Snake eating it's own tail, arbourous or something.
+            # Will have to see this one in action
         
         else:
-            oid = id(obj)   #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            self._local_objects[oid] = obj  #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            oid = id(obj)
+                #if oid not in self._local_objects:   # Should instead check if object has changed.
+            
+            self._local_objects[oid] = obj  # the same id could be used later if garbage collected
+            
             cls = getattr(obj, "__class__", type(obj))
-            package = self.packer(label=global_consts.LABEL_NEW_PROXY, contents=(oid, cls.__name__, cls.__module__))
+            package = self.packer(label=global_consts.LABEL_NETREFABLE, contents=(oid, cls.__name__, cls.__module__))
+            #Maybe below would be better?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            #package = self.packer(label=global_consts.LABEL_NETREFABLE, contents=(oid, cls.__name__, cls.inspect.getmodule.__name__))  or #__file__
+            # If can't get name or module what to do???!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         return package
-        
-        # Should I check if obj in _local_objects, or empty it sometimes
-        
-        # inspect.getmodule (maybe this is better)!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # If can't get name or module what to do???!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
-    #Better labels
-    
-    #EXISTING_OBJECT_ID
-    #NEW_OBJECT_ID
     
     def _unbox(self, package):
         """recreate a local object representation of the remote object: if the
         object is passed by value, just return it; if the object is passed by
-        reference, create a netref to it"""
+        reference, create a netref to it
+        """
         label, contents = package
         
         if label == global_consts.LABEL_IMMUTABLE:
@@ -321,7 +319,7 @@ class Connection(object):
             mut_tuple = tuple(self._unbox(sub_package) for sub_package in contents)
             return mut_tuple
         
-        elif label == global_consts.LABEL_EXISTING_PROXY:       # Needs some thought###################
+        elif label == global_consts.LABEL_LOCAL_OBJECT_REF:       # Needs some thought###################
             oid = contents
             
             try:
@@ -331,7 +329,7 @@ class Connection(object):
             
             return native_object
         
-        elif label == global_consts.LABEL_NEW_PROXY:
+        elif label == global_consts.LABEL_NETREFABLE:
             oid, clsname, modname = contents
             
             if oid in self._proxy_cache:
@@ -353,11 +351,11 @@ class Connection(object):
         then creates an instance of this and sets it's ___oid__ and ___conn__"""
         typeinfo = (clsname, modname)
         
-        if typeinfo in self._netref_classes_cache:
+        if typeinfo in self._netref_classes_cache:          # previous created
             cls = self._netref_classes_cache[typeinfo]
-        elif typeinfo in netref.builtin_classes_cache:
+        elif typeinfo in netref.builtin_classes_cache:      # pre created builtins
             cls = netref.builtin_classes_cache[typeinfo]
-        else:
+        else:                                               # build new
             info = self.sync_request(global_consts.HANDLE_INSPECT, oid)
             cls = netref.class_factory(clsname, modname, info)
             self._netref_classes_cache[typeinfo] = cls
@@ -769,7 +767,7 @@ class Connection(object):
     def _handle_inspect(self, oid):
         # inspect methods is a weird function doesn't return all methods just some that arn't builtins
         """Used for returning the methods needed to build new proxy classes here"""
-        return tuple(netref.inspect_methods(self._local_objects[oid]))
+        return tuple(netref.inspect_methods(self._local_objects[oid]).items())
     
     @register_handler(global_consts.HANDLE_GETATTR, _HANDLERS)
     def _handle_getattr(self, oid, name):
