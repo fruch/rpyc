@@ -207,7 +207,7 @@ class Connection(object):
                                     {oid: weakref(obj, callback)} 
     * _netref_classes_cache     # Dictionary of previously created proxy classes, 
                                     {(clsname, modname): cls}
-     # netref.builtin_classes_cache    # pre created proxy class for builtins
+     # netref.PROXY_BUILTIN_TYPE_DICT    # pre created proxy class for builtins
     """
     _connection_id_generator = itertools.count(1)
     _HANDLERS = {}                                               # functionailty specfic handlers
@@ -231,7 +231,7 @@ class Connection(object):
         self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, orginal objects to object ids
         self._proxy_cache = WeakValueDictionary()   # {oid: proxy_obj} oid to proxy objects not owned by this connection
         self._netref_classes_cache = {}             # classes that have been??????
-        self._netref_builtin_classes = netref.builtin_classes_cache  # Already created in netref
+        self._netref_proxy_builtin_cls = netref.PROXY_BUILTIN_TYPE_DICT  # Already created in netref
         
         self._seqcounter = itertools.count()        # With this we will generate the msg seq numbers
         
@@ -267,6 +267,31 @@ class Connection(object):
         return self._remote_root
     
     #------------------------------------------------------
+    #  Function to make netrefs
+    #------------------------------------------------------
+    
+    def _netref_factory(self, oid, clsname, modname):
+        """ creation of proxy objects, we call netrefs
+        
+        First creates and instance of the proxy to act as the function or 
+        object or class or metaclass 
+        using the proxy instance creater BaseNetref
+        then creates an instance of this and sets it's ___oid__ and ___conn__"""
+        typeinfo = (clsname, modname)
+        
+        if typeinfo in self._netref_classes_cache:          # previous created
+            cls = self._netref_classes_cache[typeinfo]
+        elif typeinfo in self._netref_proxy_builtin_cls:      # pre created builtins
+            cls = self._netref_proxy_builtin_cls[typeinfo]
+        else:                                               # build new
+            methods_tup = self.sync_request(global_consts.HANDLE_INSPECT, oid)
+            cls = netref.make_proxy_class(clsname, modname, methods_tup)
+            self._netref_classes_cache[typeinfo] = cls
+        
+        netref_instance = cls(conn=weakref.ref(self), oid=oid)
+        return netref_instance    #Here ___con__ and ___oid__ are set
+    
+    #------------------------------------------------------
     # Boxing, wrap up the objects and label them
     #  In python everything is an object! and thus everything supports id and type
     #------------------------------------------------------
@@ -284,7 +309,7 @@ class Connection(object):
         elif type(obj) is tuple:
             package = self.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
         
-        elif isinstance(obj, netref.BaseNetref) and obj.____conn__() is self:   #This one detects local proxy objects
+        elif netref.is_netref(obj) and obj.____conn__() is self:   #This one detects local proxy objects
             package = self.packer(label=global_consts.LABEL_LOCAL_OBJECT_REF, contents=obj.____oid__)
             
             print("using the third way in _box, detected local proxy object, wow, how did this come to be")
@@ -341,27 +366,6 @@ class Connection(object):
         
         else:
             raise Protocol_Unbox_Exception("Couldn't unbox, invalid label={label}".format(label=label))
-    
-    def _netref_factory(self, oid, clsname, modname):
-        """ creation of proxy objects, we call netrefs
-        
-        First creates and instance of the proxy to act as the function or 
-        object or class or metaclass 
-        using the proxy instance creater BaseNetref
-        then creates an instance of this and sets it's ___oid__ and ___conn__"""
-        typeinfo = (clsname, modname)
-        
-        if typeinfo in self._netref_classes_cache:          # previous created
-            cls = self._netref_classes_cache[typeinfo]
-        elif typeinfo in netref.builtin_classes_cache:      # pre created builtins
-            cls = netref.builtin_classes_cache[typeinfo]
-        else:                                               # build new
-            info = self.sync_request(global_consts.HANDLE_INSPECT, oid)
-            cls = netref.class_factory(clsname, modname, info)
-            self._netref_classes_cache[typeinfo] = cls
-        
-        netref_instance = cls(conn=weakref.ref(self), oid=oid)
-        return netref_instance    #Here ___con__ and ___oid__ are set
     
     #------------------------------------------------------
     #  Startup
@@ -767,7 +771,7 @@ class Connection(object):
     def _handle_inspect(self, oid):
         # inspect methods is a weird function doesn't return all methods just some that arn't builtins
         """Used for returning the methods needed to build new proxy classes here"""
-        return tuple(netref.inspect_methods(self._local_objects[oid]).items())
+        return netref.inspect_methods(self._local_objects[oid])
     
     @register_handler(global_consts.HANDLE_GETATTR, _HANDLERS)
     def _handle_getattr(self, oid, name):
