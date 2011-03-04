@@ -380,7 +380,7 @@ class Test_make_proxy(object):
         assert proxy_repr == local_repr
 
 
-    def test_make_proxy_class(self):
+    def test_class(self):
         
         class local_class(object):
             cls_attr = 42
@@ -412,7 +412,7 @@ class Test_make_proxy(object):
         print("checking instance created via proxy and via native, (instance_via_proxy.x={instance_via_proxy.x}) == (instance_via_native.x={instance_via_native.x})".format(**locals()))
         assert instance_via_proxy.x == instance_via_native.x
 
-    def test_make_proxy_instances(self):
+    def test_instances(self):
         
         class local_class1(object):
             """DOC1"""
@@ -519,7 +519,7 @@ class Test_make_proxy(object):
         print("__dict__ consistant after adding addr:: (proxy2_dict={proxy2_dict}) == (local2_dict={local2_dict})".format(**locals()))
         assert proxy2_dict == local2_dict and "attr_new" in local2_dict
 
-    def test_make_proxy_generator(self):
+    def test_generator(self):
         
         generator1 = (x for x in range(10))
         generator2 = (x for x in range(10))
