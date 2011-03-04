@@ -256,7 +256,7 @@ class pretend_connection():
     def __init__(self):
         self.handlers = {global_consts.HANDLE_GETATTR: lambda oid, attr_name: getattr(self.obj_register[oid], attr_name),
                          global_consts.HANDLE_DELATTR: lambda oid, attr_name: delattr(self.obj_register[oid], attr_name),
-                         global_consts.HANDLE_SETATTR: lambda oid, attr_name: setattr(self.obj_register[oid], attr_name, val),
+                         global_consts.HANDLE_SETATTR: lambda oid, attr_name, val: setattr(self.obj_register[oid], attr_name, val),
                          global_consts.HANDLE_HASH: lambda oid: hash(self.obj_register[oid]),
                          global_consts.HANDLE_REPR:  lambda oid: repr(self.obj_register[oid]),
                          global_consts.HANDLE_STR: lambda oid: str(self.obj_register[oid]),
@@ -277,6 +277,9 @@ class pretend_connection():
             raise
         else:
             return ret_val
+    
+    def async_request(self, handler, oid, *args):
+        return "async_request", handler
     
     def make_proxy_for_testing(self, obj):
         func_cls = type(obj)
@@ -306,22 +309,31 @@ class Test_make_proxy(object):
         
         proxy_obj, proxy_cls = self.conn.make_proxy_for_testing(new_function)
         
+        #--------------------
+        # Check got proxy
+        
         print("Checking proxy_obj is a newref proxy")
         assert netref.is_netref(proxy_obj) == True
         print("Checking new_function is not a newref proxy")
         assert netref.is_netref(new_function) == False
         
+        #--------------------
+        # Check callable and return value
         expected_retval = 5
         new_func_retval = new_function(2, 3)
         proxy_func_retval = proxy_obj(2, 3)
         print("Checking (expected_retval={expected_retval}) == (new_func_retval={new_func_retval}) == (proxy_func_retval={proxy_func_retval})".format(**locals()))
         assert new_func_retval == proxy_func_retval == expected_retval
+        
+        #--------------------
+        # Check async
+        typ, hand = netref.asyncreq(proxy=proxy_obj, handler=4)
+        print("Checking async call", ("async_request", 4))
+        assert (typ, hand) == ("async_request", 4)
 
     def test_dict(self):
         
         local_dict = {"A":1, "B":2}
-        
-        #------------------
         
         proxy_obj, proxy_cls = self.conn.make_proxy_for_testing(local_dict)
         print("Checking proxy_obj is a newref proxy")
@@ -334,14 +346,16 @@ class Test_make_proxy(object):
         print("Checking (local_dict_retval={local_dict_retval}) == (proxy_dict_retval={proxy_dict_retval})".format(**locals()))
         assert local_dict_retval == proxy_dict_retval
         
-        #------------------ method docs
+        #------------------ 
+        #method docs
         
         local_dict_keys_doc = local_dict.keys.__doc__
         proxy_dict_keys_doc = proxy_obj.keys.__doc__
         print("Checking keys method same (local_dict={local_dict_keys_doc}) == (proxy_obj={proxy_dict_keys_doc})".format(**locals()))
         assert local_dict_keys_doc == proxy_dict_keys_doc
         
-        #------------------method keys
+        #------------------
+        #method keys
         
         keys_proxy_obj, keys_proxy_cls = self.conn.make_proxy_for_testing(local_dict.keys)
         proxy_keys = keys_proxy_obj()
@@ -349,14 +363,16 @@ class Test_make_proxy(object):
         print("Checking keys same (local_dict={local_dict_keys}) == (proxy_obj={proxy_keys})".format(**locals()))
         assert proxy_keys == local_dict_keys
         
-        #-----------------obj still iterable
+        #-----------------
+        #obj still iterable
         
         set_of_keys_from_proxy = set([key for key in proxy_obj])
         set_of_local_keys = set(local_dict_keys)
         print("Checking dict still iterable keys={set_of_keys_from_proxy})".format(**locals()))
         assert set_of_keys_from_proxy == set_of_local_keys
         
-        #----------------obj proxy still repr
+        #----------------
+        #obj proxy still repr
         
         proxy_repr = repr(proxy_obj)
         local_repr = repr(local_dict)
@@ -364,29 +380,202 @@ class Test_make_proxy(object):
         assert proxy_repr == local_repr
 
 
-#def test_make_proxy_class(self):
-#    assert False
+    def test_make_proxy_class(self):
+        
+        class local_class(object):
+            cls_attr = 42
+            def __init__(self, x):
+                self.x = x
+            @classmethod
+            def local_cls_function(cls):
+                """A local function"""
+                return cls.cls_attr
+        
+        proxy_obj, proxy_cls = self.conn.make_proxy_for_testing(local_class)
+        
+        #--------------------------------
+        # cls attr access
+        print("checking class attr access and classmethod")
+        assert proxy_obj.local_cls_function() == proxy_obj.cls_attr == local_class.local_cls_function() == local_class.cls_attr
+        
+        #--------------------------------
+        # setting class attr via proxy
+        proxy_obj.cls_attr += 1
+        print("checking class attr set and reading changed value")
+        assert proxy_obj.local_cls_function() == proxy_obj.cls_attr == local_class.local_cls_function() == local_class.cls_attr == 43
+        
+        #--------------------------------
+        # instance creation
+        instance_via_proxy = proxy_obj(1)
+        instance_via_native = local_class(1)
+        
+        print("checking instance created via proxy and via native, (instance_via_proxy.x={instance_via_proxy.x}) == (instance_via_native.x={instance_via_native.x})".format(**locals()))
+        assert instance_via_proxy.x == instance_via_native.x
 
-#def test_make_proxy_instance(self):
-#    assert False
+    def test_make_proxy_instances(self):
+        
+        class local_class1(object):
+            """DOC1"""
+            def __init__(self):
+                self.local_attr = 13
+            def local_function(self):
+                """A local function"""
+                return 42
+            def func1(self):
+                return 1
+            def __hash__(self):
+                return 7
+        
+        class local_class2(local_class1):
+            """DOC2"""
+            def __init__(self):
+                pass
+            def func1(self):
+                return "one"
+        
+        instance1 = local_class1()
+        instance2 = local_class2()
+        
+        proxy_obj1, proxy_cls1 = self.conn.make_proxy_for_testing(instance1)
+        proxy_obj2, proxy_cls2 = self.conn.make_proxy_for_testing(instance2)
+        #make remote instances of above
+        
+        #-----------------------------
+        # hash consistant
+        proxy1_hash = hash(proxy_obj1)
+        proxy2_hash = hash(proxy_obj2)
+        local1_hash = hash(instance1)
+        local2_hash = hash(instance2)
+        print("hash consistant:: (proxy1_hash={proxy1_hash}) == (proxy2_hash={proxy2_hash}) == (local1_hash={local1_hash}) == (local2_hash={local2_hash})".format(**locals()))
+        assert proxy1_hash == proxy2_hash == local1_hash == local2_hash
+        
+        #-----------------------------
+        # class consistant
+        proxy1_class = proxy_obj1.__class__
+        local1_class = instance1.__class__
+        print("hash1 consistant:: (proxy1_class={proxy1_class}) == (local1_class={local1_class})".format(**locals()))
+        assert proxy1_class ==  local1_class
+        
+        proxy2_class = proxy_obj2.__class__
+        local2_class = instance2.__class__
+        print("hash2 consistant:: (proxy2_class={proxy2_class}) == (local2_class={local2_class})".format(**locals()))
+        assert proxy2_class == local2_class
+        
+        #-----------------------------
+        # doc consistant
+        proxy1_doc = proxy_obj1.__doc__
+        local1_doc = instance1.__doc__
+        print("doc consistant:: (proxy1_doc={proxy1_doc}) == (local1_doc={local1_doc}) ".format(**locals()))
+        assert proxy1_doc == local1_doc
+        
+        proxy2_doc = proxy_obj2.__doc__
+        local2_doc = instance2.__doc__
+        print("doc consistant:: (proxy2_doc={proxy2_doc}) == (local2_doc={local2_doc}) ".format(**locals()))
+        assert proxy2_doc == local2_doc
+        
+        #-----------------------------
+        # dict consistant
+        proxy1_dict = proxy_obj1.__dict__
+        local1_dict = instance1.__dict__
+        print("__dict__ consistant:: (proxy1_dict={proxy1_dict}) == (local1_dict={local1_dict})".format(**locals()))
+        assert proxy1_dict == local1_dict
+        
+        local2_dict = instance2.__dict__
+        proxy2_dict = proxy_obj2.__dict__
+        print("__dict__ consistant:: (proxy2_dict={proxy2_dict}) == (local2_dict={local2_dict})".format(**locals()))
+        assert proxy2_dict == local2_dict
+        
+        #-----------------------------
+        # func 1
+        proxy1_func1 = proxy_obj1.func1()
+        print("checking proxy1_func1", proxy1_func1)
+        assert proxy1_func1 == 1
+        
+        proxy2_func1 = proxy_obj2.func1()
+        print("checking proxy2_func1", proxy2_func1)
+        assert proxy2_func1 == "one"
+        
+        #-----------------------------
+        # func
+        proxy2_func1 = lambda : 4
+        proxy_obj2.func1 = proxy2_func1
+        proxy2_func1 = proxy_obj2.func1()
+        instance2_func1 = instance2.func1()
+        proxy1_func1 = proxy_obj1.func1()
+        print("checking newly made func through proxy", proxy2_func1)
+        assert proxy2_func1 == proxy2_func1 == 4 != proxy1_func1
+        
+        #-----------------------------
+        # new addr
+        proxy_obj2.attr_new = 111
+        proxy2_added_attr = proxy_obj2.attr_new
+        instance2_added_attr = instance2.attr_new
+        print("checking newly added attr", proxy2_added_attr)
+        assert proxy2_added_attr == instance2_added_attr == 111
+        
+        local2_dict = instance2.__dict__
+        proxy2_dict = proxy_obj2.__dict__
+        print(local2_dict, proxy2_dict)
+        print("__dict__ consistant after adding addr:: (proxy2_dict={proxy2_dict}) == (local2_dict={local2_dict})".format(**locals()))
+        assert proxy2_dict == local2_dict and "attr_new" in local2_dict
 
-#def test_make_proxy_generator(self):
-#    #Should still be a generator
-#    assert False
-
-#def test_make_proxy_cls_with_slots(self):
-#    #Slots shouldn't mess things up
-#    assert Fasle
-
-#syncreq and asyncreq
+    def test_make_proxy_generator(self):
+        
+        generator1 = (x for x in range(10))
+        generator2 = (x for x in range(10))
+        self.conn = pretend_connection()  #For some reason setup doesn't work here
+        proxy_obj, proxy_cls = self.conn.make_proxy_for_testing(generator2)
+        del self.conn
+        for x, y in zip(generator1, proxy_obj):
+            yield self.check_eq, x, y
+    
+    def check_eq(self, x, y):
+        assert x == y
+    
+    def test_slots_objects(self):
+        
+        class slots_class(object):
+            __slots__ = ('x', 'y')
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+        
+        native_slots = slots_class(1,2)
+        proxy_slots, proxy_slots_cls = self.conn.make_proxy_for_testing(native_slots)
+        
+        print("Check slots object x attr the same native={native_slots.x}, proxy={proxy_slots.x}".format(**locals()))
+        assert native_slots.x == proxy_slots.x
+        
+        try:
+            native_slots.z = 3
+        except AttributeError:
+            pass
+        else:
+            raise Exception
+        try:
+            proxy_slots.a = 4
+        except AttributeError:
+            pass
+        else:
+            raise Exception
 
 #===================================================================
 
-#NATIVE_BUILTIN_TYPE_DICT
-#PROXY_BUILTIN_TYPE_DICT
-#same length and non zero
-
-#instances of PROXY_BUILTIN_TYPE_DICT should pass is_netref
+def test_global_type_stores():
+    native_types = netref.NATIVE_BUILTIN_TYPE_DICT
+    proxy_types = netref.PROXY_BUILTIN_TYPE_DICT
+    
+    number_native_types = len(native_types)
+    number_proxy_types = len(proxy_types)
+    
+    print("Checking for non zero type stores")
+    assert number_native_types == number_proxy_types > 0
+    
+    all_ok = all([issubclass(typ, netref.BaseNetref) for typ in proxy_types.values()])
+    print("Checking proxies are of corect class")
+    print(type(tuple(proxy_types.values())[0]))
+    assert all_ok
+    
 
 #===================================================================
 

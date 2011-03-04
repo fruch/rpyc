@@ -14,6 +14,9 @@ What it does
 
 The common API
 
+ToDo
+
+Take out DEBUG print lines
 
 """
 import sys
@@ -77,7 +80,7 @@ class NetrefMetaclass(type):
         else:
             return "<netref class '{0}'>".format(self.__name__,)
 
-class BaseNetref(object):#, metaclass=NetrefMetaclass):
+class BaseNetref(object, metaclass=NetrefMetaclass):
     """the base netref object, from which all netref classes derive
     
     Specfics
@@ -93,9 +96,8 @@ class BaseNetref(object):#, metaclass=NetrefMetaclass):
         
         print("DEBUG_in_proxy_init")
         
-        instance_attrs = ["____conn__", "____oid__", "____local_netref_attrs__"]
-        local_attrs = ["__dict__", "__slots__", "__weakref__", "__new__"]                    #Not sure if I need these
-        self.____local_netref_attrs__ = frozenset(instance_attrs + local_attrs + BASE_NETREF_METHODS)
+        proxy_only_attrs = ["____conn__", "____oid__", "____local_netref_attrs__"]
+        self.____local_netref_attrs__ = frozenset(proxy_only_attrs)
         
         self.____conn__ = conn
         self.____oid__ = oid
@@ -131,14 +133,14 @@ class BaseNetref(object):#, metaclass=NetrefMetaclass):
     def __getattribute__(self, attrname):
         """Here we try for local access, else resolved remotely using __getattr__"""
         # Should I use super here?  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
         print("DEBUG_in_getattribute for", attrname)
-        if attrname in object.__getattribute__(self, "____local_netref_attrs__"):
-            print("DEBUG_getting local getattribute", attrname)
-            return object.__getattribute__(self, attrname)
-        else:
-            print("DEBUG_getting remote getattribute", attrname)
-            return object.__getattribute__(self, attrname)
-            #return self.__getattr__(attrname)
+        if attrname in {"__dict__", "__doc__"}:
+            return object.__getattr__(self, attrname)
+        return object.__getattribute__(self, attrname)
+    
+    def __eq__(self, other):
+        pass
     
     def __getattr__(self, attrname):
         """This is is a remote get attr call"""
@@ -161,11 +163,17 @@ class BaseNetref(object):#, metaclass=NetrefMetaclass):
             object.__setattr__(self, attrname, value)
         else:
             syncreq(self, global_consts.HANDLE_SETATTR, attrname, value)
+        
+        #if attrname in instance_attrs:
+        #    object.__setattr__(self, attrname, value)
+        #else:
+        #    syncreq(self, global_consts.HANDLE_SETATTR, attrname, value)
     
     def __dir__(self):
         return list(syncreq(self, global_consts.HANDLE_DIR))
     
     def __hash__(self):                 # support for metaclasses
+        #print("in hash this never seems to be called !!! must have a look at why, had to implement hack in __getattribute__")
         return syncreq(self, global_consts.HANDLE_HASH)
     
     def __cmp__(self, other):       # Could deal with dictionary specficly Could use pickle, Need to think here!!!!
@@ -176,15 +184,10 @@ class BaseNetref(object):#, metaclass=NetrefMetaclass):
         return syncreq(self, global_consts.HANDLE_REPR)
     
     def __str__(self):
-        print("string on proxy called")
         return syncreq(self, global_consts.HANDLE_STR)
     
     def __reduce_ex__(self, proto):          # support for pickle
         return pickle.loads, (syncreq(self, global_consts.HANDLE_PICKLE, proto),)
-
-# This is a bit of a hack I don't really like it at all.
-BASE_NETREF_METHODS = [meth for meth in dict(BaseNetref.__dict__) if hasattr(getattr(BaseNetref, meth), "__call__")]# + ["__new__"]
-
 
 #==============================================================
 #  IO
@@ -316,6 +319,8 @@ def is_netref(obj):
     return isinstance(obj, BaseNetref)
 
 #---------------------
+
+BASE_NETREF_METHODS = [meth for meth in dict(BaseNetref.__dict__) if hasattr(getattr(BaseNetref, meth), "__call__")]
 
 def make_proxy_class(clsname, modname, methods):
     """returns a netref class that with methods that will deference to original object when appropreate
