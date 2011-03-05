@@ -26,6 +26,7 @@ setup(name="RPyC",
         'rpyc.core', 
         'rpyc.lib',
         'rpyc.utils', 
+        'rpyc.scripts', 
     ],
     scripts = [
         os.path.join("rpyc", "scripts", "rpyc_classic.py"),
