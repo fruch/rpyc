@@ -76,23 +76,24 @@ allow_pickle                    bool      False        whether to allow object p
 
 
 Is an id collision possible between the two codes???????!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+If an object is deleted should do something, have a notify deletion global type !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 """
 import sys
-import select
-import weakref
+import weakref             # Where are weakref used?
 import itertools
-#import pickle
 from threading import Lock
-from collections import namedtuple
 from copy import deepcopy
 
-from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # Don't understand why locking and why weak
+from select import error as _select_error
 
 import brine_3 as brine
 import vinegar_3 as vinegar
 import netref_3 as netref
 import global_consts
+
+from rpyc.lib.lib import WeakValueDictionary, Locking_obj_dict        # Don't understand why locking and why weak
+
 #from rpyc.core import global_consts, brine, vinegar, netref
 #from rpyc.core.async import AsyncResult
 
@@ -100,7 +101,7 @@ import global_consts
 # Module Specfic Errors
 #==============================================================
 
-class Protocol_Exception(Rpyc_Exception):
+class Protocol_Exception(global_consts.Rpyc_Exception):
     """Class of errors for the Protocol module
     
     This class of exceptions is used for errors that occur
@@ -211,7 +212,6 @@ class Connection(object):
     """
     _connection_id_generator = itertools.count(1)
     _HANDLERS = {}                                               # functionailty specfic handlers
-    packer = namedtuple("package", "label, contents")            # Used for boxing and unboxing
     
     def __init__(self, service, channel, config = {}, _lazy = False):
         #  Close the connection while we set it up
@@ -226,7 +226,7 @@ class Connection(object):
         self._channel = channel
         
         self._local_root = service(weakref.proxy(self))     # Why does this have to be weak
-        self._remote_root = None
+        self._remote_root = None                            # This is set by root.  Why??????
         
         self._local_objects = Locking_dict()        # {oid: native_obj} dictionary, orginal objects to object ids
         self._proxy_cache = WeakValueDictionary()   # {oid: proxy_obj} oid to proxy objects not owned by this connection
@@ -270,7 +270,7 @@ class Connection(object):
     #  Function to make netrefs
     #------------------------------------------------------
     
-    def _netref_factory(self, oid, clsname, modname):
+    def _make_netref_instance(self, oid, clsname, modname):
         """ creation of proxy objects, we call netrefs
         
         First creates and instance of the proxy to act as the function or 
@@ -279,17 +279,17 @@ class Connection(object):
         then creates an instance of this and sets it's ___oid__ and ___conn__"""
         typeinfo = (clsname, modname)
         
-        if typeinfo in self._netref_classes_cache:          # previous created
+        if typeinfo in self._netref_classes_cache:          # previously created netref classes
             cls = self._netref_classes_cache[typeinfo]
-        elif typeinfo in self._netref_proxy_builtin_cls:      # pre created builtins
+        elif typeinfo in self._netref_proxy_builtin_cls:    # pre created builtins netref classes
             cls = self._netref_proxy_builtin_cls[typeinfo]
-        else:                                               # build new
+        else:                                               # build new netref class
             methods_tup = self.sync_request(global_consts.HANDLE_INSPECT, oid)
             cls = netref.make_proxy_class(clsname, modname, methods_tup)
-            self._netref_classes_cache[typeinfo] = cls
+            self._netref_classes_cache[typeinfo] = cls      # add to previously created
         
         netref_instance = cls(conn=weakref.ref(self), oid=oid)
-        return netref_instance    #Here ___con__ and ___oid__ are set
+        return netref_instance                              # Here ___con__ and ___oid__ are set
     
     #------------------------------------------------------
     # Boxing, wrap up the objects and label them
@@ -301,30 +301,37 @@ class Connection(object):
         the remote party either by-value or by-reference
         
         returns package
-        package = named_tuple(label, contents)        :for some labels, contents may be a tuple
+        package = (label, contents)        :for some labels, contents may be a tuple
         """
-        if brine.dumpable(obj):
-            package = self.packer(label=global_consts.LABEL_IMMUTABLE, contents=obj)
+        if brine.dumpable(obj):                                    # Immutable obj supported by brine
+            label = global_consts.LABEL_IMMUTABLE
+            contents = obj
+            package = (label, contents)
         
-        elif type(obj) is tuple:
-            package = self.packer(label=global_consts.LABEL_MUT_TUPLE, contents=tuple(self._box(item) for item in obj))
+        elif type(obj) is tuple:                                   # Tuple containing mutables
+            label = global_consts.LABEL_MUT_TUPLE
+            contents = tuple(self._box(item) for item in obj)
+            package = (label, contents)
         
-        elif netref.is_netref(obj) and obj.____conn__() is self:   #This one detects local proxy objects
-            package = self.packer(label=global_consts.LABEL_LOCAL_OBJECT_REF, contents=obj.____oid__)
+        elif netref.is_netref(obj) and obj.____conn__() is self:   # This one detects local proxy objects
+            label = global_consts.LABEL_LOCAL_OBJECT_REF
+            contents = obj.____oid__
+            package = (label, contents)
             
             print("using the third way in _box, detected local proxy object, wow, how did this come to be")
             # Will have to see this one in action
         
-        else:
+        else:                                                      # Pure mutable data
             oid = id(obj)
-                #if oid not in self._local_objects:   # Should instead check if object has changed.
+            cls = getattr(obj, "__class__", type(obj))
             
+            #Add object to local object dict, I would have thought this should be a weakkeydict
             self._local_objects[oid] = obj  # the same id could be used later if garbage collected
             
-            cls = getattr(obj, "__class__", type(obj))
-            package = self.packer(label=global_consts.LABEL_NETREFABLE, contents=(oid, cls.__name__, cls.__module__))
-            #Maybe below would be better?!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            #package = self.packer(label=global_consts.LABEL_NETREFABLE, contents=(oid, cls.__name__, cls.inspect.getmodule.__name__))  or #__file__
+            label = global_consts.LABEL_NETREFABLE
+            contents = (oid, cls.__name__, cls.__module__)
+            package = (label, contents)
+            # cls.inspect.getmodule.__name__        !!!!!!!!!!!!!Maybe better !!!!!!!!!!!!!!!!!!!!!!!
             # If can't get name or module what to do???!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         return package
@@ -357,11 +364,11 @@ class Connection(object):
         elif label == global_consts.LABEL_NETREFABLE:
             oid, clsname, modname = contents
             
-            if oid in self._proxy_cache:
-                return self._proxy_cache[oid]
-            
-            proxy = self._netref_factory(oid, clsname, modname)
-            self._proxy_cache[oid] = proxy
+            if oid in self._proxy_cache:                          # Known netref proxies
+                proxy = self._proxy_cache[oid]
+            else:
+                proxy = self._make_netref_instance(oid, clsname, modname)
+                self._proxy_cache[oid] = proxy                    # Store proxy as known
             return proxy
         
         else:
@@ -387,7 +394,6 @@ class Connection(object):
         self._closed = True
         
         try:
-            # Dunno this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             self._async_request(global_consts.HANDLE_CLOSE)
         except EOFError: 
             # Dunno this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -634,7 +640,7 @@ class Connection(object):
         try:
             while True:
                 self.serve(0.1)
-        except select.error:
+        except _select_error:
             if not self._closed:
                 raise
         except EOFError:

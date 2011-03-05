@@ -29,8 +29,7 @@ import inspect
 
 import brine_3 as brine
 
-from global_consts import EXCEPTION_STOP_ITERATION
-from global_consts import Rpyc_Exception
+from global_consts import EXCEPTION_STOP_ITERATION, Rpyc_Exception
 
 inbuilt_expections = {xept: getattr(builtins, xept) for xept in dir(builtins) 
                       if inspect.isclass(getattr(builtins, xept)) 
@@ -218,38 +217,43 @@ def load(exception_data, use_nonstandard_exceptions=True, allow_importfail=True)
             
     #Here we create a local representation of the exception
     print("MODNAME=", modname)
+    
+    cls = None
     if modname == "builtins":                       # Not valid in python3, exceptions have been moved to builtins
-        cls = getattr(builtins, clsname, None)
+        cls = getattr(builtins, clsname, None)      # This allows use to recover a bit an use a Generic
         if not inspect.isclass(cls) and issubclass(cls, BaseException):
             load_err()
-        the_exception = cls(*args)
-    elif use_nonstandard_exceptions and modname in sys.modules:   #!!!!!!!!!!!!  Check module is known
-        print("INITALISE NON STANDARD EXCEPTION")
-        
-        try:
-            cls = getattr(sys.modules[modname], clsname, None)
-        except KeyError:
-            print("No such module has been imported and known")
-            _import_err(modname)
-        except AttributeError:
-            print("couldn't find the class in the above module")
-            _import_err(modname+"."+clsname)
-        else:
-            if not inspect.isclass(cls) and issubclass(cls, BaseException):
-                load_err()
-            
+        if cls:
             the_exception = cls(*args)
-    else:
-        print("Unknown module, making a generic representation of it")
-        fullname = "{0}.{1}".format(modname, clsname)
-        if fullname not in _generic_exceptions_cache:
-            #fakemodule = {"__module__" : "{0}.{1}".format(__name__, modname)}
-            fakemodule = {"__module__" : "{0}".format(modname)}
-            _generic_exceptions_cache[fullname] = type(clsname, (GenericException,), fakemodule)  #!!!!!!!!!!!!!!!! why use this
-        cls = _generic_exceptions_cache[fullname]
-        the_exception = cls()
-        the_exception.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
+    if cls == None:
+        if use_nonstandard_exceptions and modname in sys.modules:
+            print("INITALISE NON STANDARD EXCEPTION")
+            
+            try:
+                cls = getattr(sys.modules[modname], clsname, None)
+            except KeyError:             # Don't think this can ever happen
+                print("No such module has been imported and known")
+                _import_err(modname)
+            except AttributeError:
+                print("couldn't find the class in the above module")
+                _import_err(modname+"."+clsname)
+            else:
+                if not inspect.isclass(cls) and issubclass(cls, BaseException):
+                    load_err()
+                
+                the_exception = cls(*args)
+        else:
+            print("Unknown module, making a generic representation of it")
+            fullname = "{0}.{1}".format(modname, clsname)
+            if fullname not in _generic_exceptions_cache:
+                #fakemodule = {"__module__" : "{0}.{1}".format(__name__, modname)}
+                fakemodule = {"__module__" : "{0}".format(modname)}
+                _generic_exceptions_cache[fullname] = type(clsname, (GenericException,), fakemodule)  #!!!!!!!!!!!!!!!! why use this
+            cls = _generic_exceptions_cache[fullname]
+            the_exception = cls()
+            the_exception.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
     print("The attrs", attrs)
     for name, attrval in attrs:
         setattr(the_exception, name, attrval)

@@ -12,7 +12,6 @@ from rpyc.lib.lib import WeakValueDict, RefCountingColl
 from rpyc.core import consts, brine, vinegar, netref
 from rpyc.core.async import AsyncResult
 
-
 class PingError(Exception):
     pass
 

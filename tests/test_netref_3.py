@@ -2,7 +2,6 @@ import inspect
 import global_consts
 from itertools import count
 import netref_3 as netref
-#from netref_3 import
 
 #####################################################################
 #####################################################################
@@ -579,6 +578,10 @@ def test_global_type_stores():
 
 #===================================================================
 
+
+#Files
+#Sockets
+#Etc
 
 #Abstract, metaclass
 #mutli inheratance

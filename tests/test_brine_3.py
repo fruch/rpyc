@@ -1,13 +1,7 @@
 
+from collections import namedtuple
+
 from nose.tools import raises
-
-#import rpyc
-
-#from rpyc.core.brine_3 import dumpable
-#from rpyc.core.brine_3 import dump
-#from rpyc.core.brine_3 import load
-#from rpyc.core.brine_3 import _pickle
-#from rpyc.core.brine_3 import Brine_Exception
 
 from brine_3 import dumpable
 from brine_3 import dump

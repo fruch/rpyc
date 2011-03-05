@@ -25,14 +25,11 @@ _unpickle  : Just a tiny wrapper of native python pickle that interchanges a pic
 # Implement better errors, that can be imported from this module alone !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # See below
 
+#"Protocol version 3 was added in Python 3.0. It has explicit support for bytes and cannot be unpickled by Python 2.x pickle modules. This is the current recommended protocol, use it whenever it is possible."
 import pickle as _pickler # In python3 this one now attempt to import the cPickle one automatcially
 
-"Protocol version 3 was added in Python 3.0. It has explicit support for bytes and cannot be unpickled by Python 2.x pickle modules. This is the current recommended protocol, use it whenever it is possible."
-
-from global_consts import TAG_PICKLED
-from global_consts import TAG_PROXIED
-from global_consts import TAG_LENGTH
-from global_consts import Rpyc_Exception
+from global_consts import TAG_PICKLED, TAG_PROXIED, TAG_LENGTH, Rpyc_Exception
+from collections import namedtuple
 
 simple_brine_types = frozenset([type(None), type(NotImplemented), type(Ellipsis), 
                                 bool, slice, int, str, float, complex, bytes])
@@ -138,6 +135,7 @@ def load(bytes_object):
 
 def dumpable(obj):
     """indicates whether the object is dumpable by brine"""
+    #print("dumpable", obj, type(obj), complex_brine_types)
     if type(obj) in simple_brine_types:
         return True
     if type(obj) in complex_brine_types:

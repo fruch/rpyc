@@ -29,12 +29,17 @@ class Locking_dict(MutableMapping):
         print("unlocked: (get)")
         return ret_val
     
-    def __setitem__(self, oid, value):
+    def __setitem__(self, oid, obj):
         with self._lock:
             print("locked: (set)")
-            ret_val = self._obj_dict.__setitem__(oid, value)
+            ret_val = self._obj_dict.__setitem__(oid, obj)
         print("unlocked: (set)")
         return ret_val
+    
+    #    def __setitem__(self, key, value):
+    #        def remover(wr, _dict = self._dict, key = key):
+    #            _dict.pop(key, None)
+    #        self._dict[key] = weakref.ref(value, remover)
     
     def __delitem__(self, oid):
         with self._lock:

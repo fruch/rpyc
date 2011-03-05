@@ -26,7 +26,6 @@ import pickle
 import builtins
 
 import global_consts
-from global_consts import Rpyc_Exception
 
 #==============================================================
 # Globals
@@ -42,7 +41,7 @@ PROXY_BUILTIN_TYPE_DICT = None    # PROXY_BUILTIN_TYPE_DICT is a dictionary of p
 # Module Specfic Errors
 #==============================================================
 
-class Netref_Exception(Rpyc_Exception):
+class Netref_Exception(global_consts.Rpyc_Exception):
     """Class of errors for the Vinegar module
     
     This class of exceptions is used for errors that occur
