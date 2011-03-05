@@ -6,6 +6,7 @@ import os
 import socket
 import time
 import threading
+import select
 import errno
 import logging
 from rpyc.core import brine, SocketStream, Channel, Connection
@@ -186,58 +187,55 @@ class ThreadedServer(Server):
         t.start()
 
 
-class ForkingServer(Server):
-    def __init__(self, *args, **kwargs):
-        if not signal:
-            raise OSError("ForkingServer not supported on this platform")
-        Server.__init__(self, *args, **kwargs)
-        # setup sigchld handler
-        self._prevhandler = signal.signal(signal.SIGCHLD, self._handle_sigchld)
-    
-    def close(self):
-        Server.close(self)
-        signal.signal(signal.SIGCHLD, self._prevhandler)
-    
-    def _get_logger(self):
-        ### XXX: show_pid = True
-        return logging.getLogger(self.service.get_service_name())
-    
-    @classmethod
-    def _handle_sigchld(cls, signum, unused):
-        try:
-            while True:
-                pid, dummy = os.waitpid(-1, os.WNOHANG)
-                if pid <= 0:
-                    break
-        except OSError:
-            pass
-        # re-register signal handler (see man signal(2), under Portability)
-        signal.signal(signal.SIGCHLD, cls._handle_sigchld)
-    
-    def _accept_method(self, sock):
-        pid = os.fork()
-        if pid == 0:
-            # child
-            try:
-                try:
-                    self.logger.debug("child process created")
-                    signal.signal(signal.SIGCHLD, self._prevhandler)
-                    self.listener.close()
-                    self.clients.clear()
-                    self._authenticate_and_serve_client(sock)
-                except:
-                    self.logger.exception("child process terminated abnormally")
-                else:
-                    self.logger.debug("child process terminated")
-            finally:
-                self.logger.debug("child terminated")
-                os._exit(0)
-        else:
-            # parent
-            sock.close()
-
-
-
-
-
+import platform
+if platform.system()=='cli':#Detect .NET platform
+	class ForkingServer:
+		def __init__(self, *args, **kwargs):
+			raise Exception("Forking server not supported in IronPython")
+else:
+	import signal
+	class ForkingServer(Server):
+		def __init__(self, *args, **kwargs):
+			Server.__init__(self, *args, **kwargs)
+			# setup sigchld handler
+			self._prevhandler = signal.signal(signal.SIGCHLD, self._handle_sigchld)
+		
+		def close(self):
+			Server.close(self)
+			signal.signal(signal.SIGCHLD, self._prevhandler)
+		
+		def _get_logger(self):
+			return Logger(self.service.get_service_name(), show_pid = True)
+		
+		@classmethod
+		def _handle_sigchld(cls, signum, unused):
+			try:
+				while True:
+					pid, dummy = os.waitpid(-1, os.WNOHANG)
+					if pid <= 0:
+						break
+			except OSError:
+				pass
+			# re-register signal handler (see man signal(2), under Portability)
+			signal.signal(signal.SIGCHLD, cls._handle_sigchld)
+		
+		def _accept_method(self, sock):
+			pid = os.fork()
+			if pid == 0:
+				# child
+				try:
+					try:
+						self.logger.info("child process created")
+						signal.signal(signal.SIGCHLD, self._prevhandler)
+						self.listener.close()
+						self.clients.clear()
+						self._authenticate_and_serve_client(sock)
+					except:
+						self.logger.traceback()
+				finally:
+					self.logger.info("child terminated")
+					os._exit(0)
+			else:
+				# parent
+				sock.close()
 
