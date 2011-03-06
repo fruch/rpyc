@@ -8,7 +8,7 @@ slice, complex, tuple(of simple types), forzenset(of simple types)
 as well as the following singletons: None, NotImplemented, Ellipsis
 """
 
-#ToDo, 
+#ToDo a secure version of brine not based on pickle.
 #
 # convert to python3 
 # python 3 does not support longs out, unicode standard, bytes in.

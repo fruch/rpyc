@@ -11,6 +11,10 @@ from rpyc.lib import safe_import
 from rpyc.lib.compat import Struct
 zlib = safe_import("zlib")
 
+#Now hace a bytes class instead of string in python 3.
+
+COMPRESS_DEFAULT = True
+
 # * 64 bit length field?
 # * separate \n into a FlushingChannel subclass?
 # * add thread safety as a subclass?
@@ -23,7 +27,7 @@ class Channel(object):
     FRAME_HEADER = Struct("!LB")
     FLUSHER = "\n" # cause any line-buffered layers below us to flush
     
-    def __init__(self, stream, compress=True):
+    def __init__(self, stream, compress=COMPRESS_DEFAULT):
         self.stream = stream
         if not zlib:
             compress = False
@@ -37,6 +41,7 @@ class Channel(object):
         return self.stream.closed
     
     def fileno(self):
+        """so supports select, file like"""
         return self.stream.fileno()
     
     def poll(self, timeout):

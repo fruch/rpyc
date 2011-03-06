@@ -33,10 +33,10 @@ MSG_REPLY        = 2
 MSG_EXCEPTION    = 3
 
 # boxing
-LABEL_VALUE      = 1
-LABEL_TUPLE      = 2
-LABEL_LOCAL_REF  = 3
-LABEL_REMOTE_REF = 4
+LABEL_IMMUTABLE         = 1 # immutable data
+LABEL_MUT_TUPLE         = 2 # tuple containing mutables
+LABEL_LOCAL_OBJECT_REF  = 3 # existing proxy
+LABEL_NETREFABLE        = 4 # new proxy
 
 # action handlers
 HANDLE_PING      = 1
@@ -57,5 +57,5 @@ HANDLE_DEL       = 15
 HANDLE_INSPECT   = 16
 HANDLE_BUFFITER  = 17
 
-# optimized exceptions
+# optimized exceptions           #??????????????????? Is this a special tag or just a value
 EXCEPTION_STOP_ITERATION = 1

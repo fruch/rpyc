@@ -12,7 +12,6 @@ from rpyc.core import consts, vinegar, netref
 from rpyc.core import brine
 from rpyc.core.async import AsyncResult
 
-
 class PingError(Exception):
     pass
 
@@ -172,6 +171,7 @@ class Connection(object):
     
     #
     # boxing
+    #  In python everything is an object, and thus supports id, type and 
     #
     def _box(self, obj):
         """store a local object in such a way that it could be recreated on
@@ -190,6 +190,9 @@ class Connection(object):
                 # see issue #16
                 cls = type(obj)
             return consts.LABEL_REMOTE_REF, (id(obj), cls.__name__, cls.__module__)
+    
+        # inspect.getmodule (maybe this is better)
+        # If can't get name or module what to do???
     
     def _unbox(self, package):
         """recreate a local object representation of the remote object: if the
@@ -350,7 +353,7 @@ class Connection(object):
             self.serve(0.1)
         isexc, obj = self._sync_replies.pop(seq)
         if isexc:
-            print "dunno here"
+            print("dunno here")
             raise obj
         else:
             return obj

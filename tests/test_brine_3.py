@@ -1,3 +1,10 @@
+import sys
+from nose import SkipTest
+if sys.version_info < (3, 0):
+    raise SkipTest("Those are only for Python3")
+    
+from collections import namedtuple
+
 from nose.tools import raises
 
 import rpyc

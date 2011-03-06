@@ -108,9 +108,10 @@ class Server(object):
                     self.logger.info("%s:%s authenticated successfully", h, p)
             else:
                 credentials = None
+            
             try:
                 self._serve_client(sock, credentials)
-            except Exception:
+            except Exception:               #< - little generic for my tastes!!!!!!!!!!!!!!!
                 self.logger.exception("client connection terminated abruptly")
                 raise
         finally:
@@ -196,53 +197,86 @@ class ThreadedServer(Server):
 
 import platform
 if platform.system()=='cli':#Detect .NET platform
-	class ForkingServer:
-		def __init__(self, *args, **kwargs):
-			raise Exception("Forking server not supported in IronPython")
+    class ForkingServer:
+        def __init__(self, *args, **kwargs):
+            raise Exception("Forking server not supported in IronPython")
 else:
-	import signal
-	class ForkingServer(Server):
-		def __init__(self, *args, **kwargs):
-			Server.__init__(self, *args, **kwargs)
-			# setup sigchld handler
-			self._prevhandler = signal.signal(signal.SIGCHLD, self._handle_sigchld)
-		
-		def close(self):
-			Server.close(self)
-			signal.signal(signal.SIGCHLD, self._prevhandler)
-		
-		def _get_logger(self):
-			return Logger(self.service.get_service_name(), show_pid = True)
-		
-		@classmethod
-		def _handle_sigchld(cls, signum, unused):
-			try:
-				while True:
-					pid, dummy = os.waitpid(-1, os.WNOHANG)
-					if pid <= 0:
-						break
-			except OSError:
-				pass
-			# re-register signal handler (see man signal(2), under Portability)
-			signal.signal(signal.SIGCHLD, cls._handle_sigchld)
-		
-		def _accept_method(self, sock):
-			pid = os.fork()
-			if pid == 0:
-				# child
-				try:
-					try:
-						self.logger.info("child process created")
-						signal.signal(signal.SIGCHLD, self._prevhandler)
-						self.listener.close()
-						self.clients.clear()
-						self._authenticate_and_serve_client(sock)
-					except:
-						self.logger.traceback()
-				finally:
-					self.logger.info("child terminated")
-					os._exit(0)
-			else:
-				# parent
-				sock.close()
+    import signal
+    class ForkingServer(Server):
+        def __init__(self, *args, **kwargs):
+            Server.__init__(self, *args, **kwargs)
+            # setup sigchld handler
+            self._prevhandler = signal.signal(signal.SIGCHLD, self._handle_sigchld)
+        
+        def close(self):
+            Server.close(self)
+            signal.signal(signal.SIGCHLD, self._prevhandler)
+        
+        def _get_logger(self):
+            return Logger(self.service.get_service_name(), show_pid = True)
+        
+        @classmethod
+        def _handle_sigchld(cls, signum, unused):
+            try:
+                while True:
+                    pid, dummy = os.waitpid(-1, os.WNOHANG)
+                    if pid <= 0:
+                        break
+            except OSError:
+                pass
+            # re-register signal handler (see man signal(2), under Portability)
+            signal.signal(signal.SIGCHLD, cls._handle_sigchld)
+        
+        def _accept_method(self, sock):
+            pid = os.fork()
+            if pid == 0:
+                # child
+                try:
+                    try:
+                        self.logger.info("child process created")
+                        signal.signal(signal.SIGCHLD, self._prevhandler)
+                        self.listener.close()
+                        self.clients.clear()
+                        self._authenticate_and_serve_client(sock)
+                    except:
+                        self.logger.traceback()
+                finally:
+                    self.logger.info("child terminated")
+                    os._exit(0)
+            else:
+                # parent
+                sock.close()
 
+    
+    @classmethod
+    def _handle_sigchld(cls, signum, unused):
+        try:
+            while True:
+                #os.waitpid(-1, os.WNOHANG)
+                pid, dummy = os.waitpid(-1, os.WNOHANG)
+                if pid <= 0:
+                    break
+                
+        except OSError:
+            pass
+        # re-register signal handler (see man signal(2), under Portability)
+        signal.signal(signal.SIGCHLD, cls._handle_sigchld)
+    
+    def _accept_method(self, sock):
+        pid = os.fork()
+        if pid == 0:
+            # child
+            try:
+                self.logger.debug("child process created")
+                signal.signal(signal.SIGCHLD, self._prevhandler)
+                self.listener.close()
+                self.clients.clear()
+                self._authenticate_and_serve_client(sock)
+            except:
+                self.logger.exception("child process terminated abnormally")
+            else:
+                self.logger.info("child process terminated")
+                os._exit(0)
+        else:
+            # parent
+            sock.close()

@@ -1,20 +1,35 @@
 """
 vinegar_3 ('when things go sour'): serialization/deserializer of exceptions.
 
-"""
+The why:
+To allow exceptions to be serized and unserialsed, allowing the passing of them across computers.
+The allow instilation of custom exception hook, to allow display of remote traceback objects.
 
+Main api::
+
+dump(exception_class, exception_instance, traceback_obj, include_local_traceback=True)
+    turn exception data, into a tuple of relevent dumpable data
+    
+    N.B.
+    sys.exc_info()¶ 
+        This function returns a tuple of three values that give information about the exception that is currently being handled.
+        If no exception is being handled anywhere on the stack, a tuple containing three None values is returned. Otherwise, the values returned are (type, value, traceback). 
+    
+load(exception_data, use_nonstandard_exceptions=True, allow_importfail=True)
+    turn exception data into an actual exception instance that can be raised
+
+
+install_rpyc_excepthook()       # Install the custom exception hook
+uninstall_rpyc_excepthook()     # Uninstall the custom exception hook
+"""
 import sys
 import traceback
 import builtins
 import inspect
 
-#from types import InstanceType, ClassType    # <- No longer exists !!!!!!!!!!!!!!!!!!!
-#import exceptions                            # <- No longer exists !!!!!!!!!!!!!!!!!!!
-
 import brine_3 as brine
 
-from globals import EXCEPTION_STOP_ITERATION as EXCEPTION_STOP_ITERATION
-from globals import Rpyc_Exception
+from global_consts import EXCEPTION_STOP_ITERATION, Rpyc_Exception
 
 inbuilt_expections = {xept: getattr(builtins, xept) for xept in dir(builtins) 
                       if inspect.isclass(getattr(builtins, xept)) 
@@ -23,38 +38,63 @@ inbuilt_expections = {xept: getattr(builtins, xept) for xept in dir(builtins)
 _generic_exceptions_cache = {}
 
 #==============================================================
-# Errors
+# Module Specfic Errors
 #==============================================================
 
 class Vinegar_Exception(Rpyc_Exception):
-    def __init__(self, err_string, err_type):
-        self.args = (err_string, err_type)
+    """Class of errors for the Vinegar module
+    
+    This class of exceptions is used for errors that occur
+    when dealing with the encoding, passing, and decoding of errors.
+    """
+    def __init__(self, err_string=''):
+        self.args = (err_string,)   #This contains info about the error, cause etc, can be a tuple of a string, tuple in this case
         self.err_string = err_string
-        self.type = err_type
     def __str__(self):
         return self.err_string
     def __repr__(self):
         return self.err_string
 
+class Vinegar_Dump_Exception(Vinegar_Exception):
+    def __init__(self, err_string="Vinegar_Dump_Exception"):
+        super(Vinegar_Dump_Exception, self).__init__(err_string)
+
+class Vinegar_Load_Exception(Vinegar_Exception):
+    def __init__(self, err_string="Vinegar_Load_Exception"):
+        super(Vinegar_Load_Exception, self).__init__(err_string)
+
+class Vinegar_Import_Exception(Vinegar_Exception):
+    def __init__(self, err_string="Vinegar_Import_Exception"):
+        super(Vinegar_Import_Exception, self).__init__(err_string)
+
+class Vinegar_Excepthook_Exception(Vinegar_Exception):
+    def __init__(self, err_string="Vinegar_Excepthook_Exception"):
+        super(Vinegar_Excepthook_Exception, self).__init__(err_string)
+
 def _dump_err():
-    return Vinegar_Exception("Vinegar: dump err", "dump_error")
+    """This function is for raising couldn't dump exception type errors"""
+    raise Vinegar_Dump_Exception("Vinegar: dump err")
     
 def _load_err():
-    return Vinegar_Exception("Vinegar: load err", "load_error")
+    """This function is for raising couldn't load exception type errors"""
+    raise Vinegar_Load_Exception("Vinegar: load err")
 
 def _import_err(module_name):
-    return Vinegar_Exception("Vinegar: couldn't import {0} to get custom exception".format(module_name), "import_error")
+    """This function is for raising couldn't import module to make sense of custom exception"""
+    raise Vinegar_Import_Exception("Vinegar: couldn't import {0} to get custom exception".format(module_name))
 
 def _excepthook_err():
-    raise Vinegar_Exception("Vinegar:: Couldn't find sys.excepthook", "excepthook_error")
+    """This error covers the event if the new exception handling hook which 
+    handles remote tracebacks can't be installed"""
+    raise Vinegar_Excepthook_Exception("Vinegar:: Couldn't find sys.excepthook")
 
 #==============================================================
 # Underbelly
 #==============================================================
 
 class GenericException(Exception):
+    """This is used to create pseudo exceptions"""
     pass
-
 
 #==============================================================
 # API
@@ -138,71 +178,92 @@ def dump(exception_class, exception_instance, traceback_obj, include_local_trace
             d_attr_val = make_dumpable(attr_val)
             attrs.append((name, d_attr_val))
     
-    return (exception_class.__module__, exception_class.__name__), tuple(args), tuple(attrs), traceback_txt
+    exception_data = (exception_class.__module__, exception_class.__name__), tuple(args), tuple(attrs), traceback_txt
+    return exception_data
 
-def load(brined_xcept, import_custom_exceptions=False, instantiate_custom_exceptions=False):
-#def load(brined_xcept, import_custom_exceptions, instantiate_custom_exceptions, instantiate_oldstyle_exceptions):
+
+def load(exception_data, use_nonstandard_exceptions=True, allow_importfail=True):
+#def load(exception_data, use_nonstandard_exceptions, instantiate_exceptions, instantiate_oldstyle_exceptions):
     """ Loads brined exception
     
     return exception returns an exception object that can be raised."""
-    #I'd like defaults here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
     #Special case
-    if brined_xcept == EXCEPTION_STOP_ITERATION:
+    if exception_data == EXCEPTION_STOP_ITERATION:
         return StopIteration() # optimization short hand #Should this be StopIteration()
     
     #Pull out values
     try:
-        (modname, clsname), args, attrs, traceback_txt = brined_xcept  #This matches return of dump func
+        (modname, clsname), args, attrs, traceback_txt = exception_data           #This matches return of dump func
     except ValueError:
         _load_err()
     
-    # import the relevent module
-    if import_custom_exceptions and modname not in sys.modules:
-        try:
-            mod = __import__(modname, None, None, "*")    #Scarey to me could this not change a global and fuck the world !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    
+    print("DO A CUSTOM IMPORT", modname not in sys.modules)
+    
+    #We may want to import a module to get a custom extension
+    if use_nonstandard_exceptions and modname not in sys.modules:
+        try:   # Should use class name here
+            mod = __import__(modname, None, None, fromlist=[clsname])
+            print("DOES CUSTOM IMPORT", mod)
+            print("CUSTOM IMPORT SUCCESS =", modname in sys.modules)
         except ImportError:
-            _import_err(modname)
+            print("Warning: FAILED TO DO CUSTOM IMPORT")
+            
+            if allow_importfail:
+                pass
+            else:
+                _import_err(modname)
+            
+    #Here we create a local representation of the exception
+    print("MODNAME=", modname)
     
-    #Here we define the execption class
-    if instantiate_custom_exceptions:
-        cls = getattr(sys.modules[modname], clsname, None)
-    elif modname == "builtins":                       # Not valid in python3, exceptions have been moved to builtins
-        cls = getattr(builtins, clsname, None)
-    else:
-        #print("Unknown module, making a generic representation of it")
-        cls = None                                       # What effect does this have better to raise an error??
-    
-    # Check class is an Exception
-    if cls != None:
-        if not inspect.isclass(cls):
+    cls = None
+    if modname == "builtins":                       # Not valid in python3, exceptions have been moved to builtins
+        cls = getattr(builtins, clsname, None)      # This allows use to recover a bit an use a Generic
+        if not inspect.isclass(cls) and issubclass(cls, BaseException):
             load_err()
-            #cls = None
-        if not issubclass(cls, BaseException):
-            load_err()
-            #cls = None
+        if cls:
+            the_exception = cls(*args)
     
-    if cls != None:
-        exc = cls(*args)
-    else:              # If counldn't import exception class make a dummy class
-        fullname = "{0}.{1}".format(modname, clsname)
-        if fullname not in _generic_exceptions_cache:
-            #fakemodule = {"__module__" : "{0}.{1}".format(__name__, modname)}
-            fakemodule = {"__module__" : "{0}".format(modname)}
-            _generic_exceptions_cache[fullname] = type(clsname, (GenericException,), fakemodule)
-        cls = _generic_exceptions_cache[fullname]
-        exc = cls()
-        exc.args = args #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
+    if cls == None:
+        if use_nonstandard_exceptions and modname in sys.modules:
+            print("INITALISE NON STANDARD EXCEPTION")
+            
+            try:
+                cls = getattr(sys.modules[modname], clsname, None)
+            except KeyError:             # Don't think this can ever happen
+                print("No such module has been imported and known")
+                _import_err(modname)
+            except AttributeError:
+                print("couldn't find the class in the above module")
+                _import_err(modname+"."+clsname)
+            else:
+                if not inspect.isclass(cls) and issubclass(cls, BaseException):
+                    load_err()
+                
+                the_exception = cls(*args)
+        else:
+            print("Unknown module, making a generic representation of it")
+            fullname = "{0}.{1}".format(modname, clsname)
+            if fullname not in _generic_exceptions_cache:
+                #fakemodule = {"__module__" : "{0}.{1}".format(__name__, modname)}
+                fakemodule = {"__module__" : "{0}".format(modname)}
+                _generic_exceptions_cache[fullname] = type(clsname, (GenericException,), fakemodule)  #!!!!!!!!!!!!!!!! why use this
+            cls = _generic_exceptions_cache[fullname]
+            the_exception = cls()
+            the_exception.args = args         #Moved this!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
+    print("The attrs", attrs)
     for name, attrval in attrs:
-        setattr(exc, name, attrval)
-
-    if hasattr(exc, "_remote_tb"):
-        exc._remote_tb += (traceback_txt,)
+        setattr(the_exception, name, attrval)
+    
+    if hasattr(the_exception, "_remote_tb"):
+        the_exception._remote_tb += (traceback_txt,)
     else:
-        exc._remote_tb = (traceback_txt,)
-
-    return exc
+        the_exception._remote_tb = (traceback_txt,)
+    
+    return the_exception
 
 #==============================================================================
 # customized except hook
@@ -216,17 +277,13 @@ def load(brined_xcept, import_custom_exceptions=False, instantiate_custom_except
 #==============================================================================
 
 # set module variable containing orginal exceptionhook
-if hasattr(sys, "excepthook"):
-    _orig_excepthook = sys.excepthook
-else:
-    # ironpython forgot to implement excepthook, scheisse
-    _orig_excepthook = None
+# No real point to this as both py2 and 3 store the original in sys.__excepthook__ anyway. :)
+# ironpython forgot to implement excepthook, scheisse
 
 def rpyc_excepthook(typ, val, tb):
     """ This is a customised exception hook, so can print remote tracebacks
     
     The can be used instead of sys.excepthook"""
-    
     if hasattr(val, "_remote_tb"):
         sys.stderr.write("======= Remote traceback =======\n")
         traceback_txt = "\n--------------------------------\n\n".join(val._remote_tb)
@@ -236,14 +293,19 @@ def rpyc_excepthook(typ, val, tb):
 
 def install_rpyc_excepthook():
     """This changes sys.excepthook to allow printing of remote tracebacks"""
-    if _orig_excepthook is not None:
+    if not hasattr(sys, "excepthook"):
+        print("Warning: sys doens't have excepthook, there be problems showing remote tracebacks")
+        sys.excepthook = None
+        sys.__excepthook__ = None
+    
+    try:
         sys.excepthook = rpyc_excepthook
-    else:
+    except:
         _excepthook_err()
 
 def uninstall_rpyc_excepthook():
     """This changes sys.excepthook to the orginal standard python one"""
-    if _orig_excepthook is not None:
-        sys.excepthook = _orig_excepthook
-    else:
+    try:
+        sys.excepthook = sys.__excepthook__
+    except:
         _excepthook_err()
