@@ -8,16 +8,16 @@ import sys
 import exceptions
 import traceback
 from types import InstanceType, ClassType
+
 from rpyc.core import brine
 from rpyc.core import consts
-
-
-class GenericException(Exception):
-    pass
 
 _generic_exceptions_cache = {}
 
 STOP_ITERATION_MAGIC = 0
+
+class GenericException(Exception):
+    pass
 
 def dump(typ, val, tb, include_local_traceback):
     if type(typ) is str:
@@ -38,6 +38,8 @@ def dump(typ, val, tb, include_local_traceback):
                     args.append(a)
                 else:
                     args.append(repr(a))
+        if name == "message": # skip this DeprecationWarning: BaseException.message has been deprecated as of Python 2.6 
+            pass
         elif not name.startswith("_") or name == "_remote_tb":
             attrval = getattr(val, name)
             if not brine.dumpable(attrval):
@@ -51,9 +53,12 @@ except NameError:
     # python 2.4 compatible
     BaseException = Exception
 
-def load(val, import_custom_exceptions, instantiate_custom_exceptions, instantiate_oldstyle_exceptions):
+def load(val, import_custom_exceptions, instantiate_custom_exceptions, 
+         instantiate_oldstyle_exceptions):
+
     if val == consts.EXC_STOP_ITERATION:
         return StopIteration # optimization
+    
     if type(val) is str:
         return val # deprecated string exceptions
     
@@ -103,9 +108,9 @@ def load(val, import_custom_exceptions, instantiate_custom_exceptions, instantia
     return exc
 
 
-#===============================================================================
+#==============================================================================
 # customized except hook
-#===============================================================================
+#==============================================================================
 if hasattr(sys, "excepthook"):
     _orig_excepthook = sys.excepthook
 else:
@@ -127,5 +132,3 @@ def install_rpyc_excepthook():
 def uninstall_rpyc_excepthook():
     if _orig_excepthook is not None:
         sys.excepthook = _orig_excepthook
-
-

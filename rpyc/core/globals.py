@@ -4,13 +4,28 @@ constants used by the protocol
 
 from sys import exit as _exit
 
+#=========================================================
+# Errors
+#=========================================================
+
+class Rpyc_Exception(Exception):
+    def __init__(self, err_string, err_type):
+        self.args = (err_string, err_type)
+        self.err_string = err_string
+        self.type = err_type
+    def __str__(self):
+        return self.err_string
+    def __repr__(self):
+        return self.err_string
+
 # Tag used by brine, proxy or pickled object
-TAG_PICKLED = "\x01"
-TAG_PROXIED = "\x02"
-TAG_LENGTH = len(TAG_PICKLED)
+TAG_PICKLED = b"\x01"
+TAG_PROXIED = b"\x02"
 
 if len(TAG_PICKLED) != len(TAG_PROXIED):
     _exit("bad tag length")
+
+TAG_LENGTH = len(TAG_PICKLED)
 
 # messages
 MSG_REQUEST      = 1
@@ -43,4 +58,4 @@ HANDLE_INSPECT   = 16
 HANDLE_BUFFITER  = 17
 
 # optimized exceptions
-EXC_STOP_ITERATION = 1
+EXCEPTION_STOP_ITERATION = 1

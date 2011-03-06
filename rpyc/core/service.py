@@ -27,9 +27,11 @@ class Service(object):
     
     def __init__(self, conn):
         self._conn = conn
+
     def on_connect(self):
         """called when the connection is established"""
         pass
+
     def on_disconnect(self):
         """called when the connection had already terminated for cleanup
         (must not perform any IO on the connection)"""
@@ -41,8 +43,10 @@ class Service(object):
         else:
             name = "exposed_" + name
         return getattr(self, name)
+
     def _rpyc_delattr(self, name):
         raise AttributeError("access denied")
+
     def _rpyc_setattr(self, name, value):
         raise AttributeError("access denied")
     
@@ -54,6 +58,7 @@ class Service(object):
         if name.endswith("SERVICE"):
             name = name[:-7]
         return (name,)
+
     @classmethod
     def get_service_name(cls):
         return cls.get_service_aliases()[0]
@@ -70,15 +75,18 @@ class VoidService(Service):
 class ModuleNamespace(object):
     """used by the SlaveService to implement the magic 'module namespace'"""
     __slots__ = ["__getmodule", "__cache", "__weakref__"]
+
     def __init__(self, getmodule):
         self.__getmodule = getmodule
         self.__cache = {}
+
     def __getitem__(self, name):
         if type(name) is tuple:
             name = ".".join(name)
         if name not in self.__cache:
             self.__cache[name] = self.__getmodule(name)
         return self.__cache[name]
+
     def __getattr__(self, name):
         return self[name]
 
@@ -88,6 +96,7 @@ class SlaveService(Service):
     the classic RPyC (2.6) modus operandi. 
     This service is very useful in local, secured networks, but it exposes
     a major security risk otherwise."""
+
     __slots__ = ["exposed_namespace"]
     
     def on_connect(self):
@@ -111,16 +120,12 @@ class SlaveService(Service):
     
     def exposed_execute(self, text):
         exec text in self.exposed_namespace
+
     def exposed_eval(self, text):
         return eval(text, self.exposed_namespace)
+
     def exposed_getmodule(self, name):
         return __import__(name, None, None, "*")
+ 
     def exposed_getconn(self):
         return self._conn
-
-
-
-
-
-
-

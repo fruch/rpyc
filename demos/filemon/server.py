@@ -1,21 +1,25 @@
-import rpyc
 import os
 import time
 from threading import Thread
 
+import rpyc
+
+
 class FileMonitorService(rpyc.Service):
     class exposed_FileMonitor(object):
-        def __init__(self, filename, callback, interval = 1):
+        def __init__(self, filename, callback, interval=1):
             self.filename = filename
             self.interval = interval
             self.last_stat = None
             self.callback = rpyc.async(callback)   # make the callback async
             self.active = True
-            self.thread = Thread(target = self.work)
+            self.thread = Thread(target=self.work)
             self.thread.start()
+        
         def exposed_stop(self):
             self.active = False
             self.thread.join()
+
         def work(self):
             while self.active:
                 stat = os.stat(self.filename)
@@ -27,5 +31,4 @@ class FileMonitorService(rpyc.Service):
 
 if __name__ == "__main__":
     from rpyc.utils.server import ThreadedServer
-    ThreadedServer(FileMonitorService, port = 18871).start()
-
+    ThreadedServer(FileMonitorService, port=18871).start()

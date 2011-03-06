@@ -299,12 +299,3 @@ if __name__ == "__main__":
     y = dump(x)
     z = load(y)
     assert x == z
-    
-
-
-
-
-
-
-
-

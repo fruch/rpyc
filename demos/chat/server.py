@@ -1,13 +1,14 @@
 from __future__ import with_statement
+from threading import RLock
+
 from rpyc import Service, async
 from rpyc.utils.server import ThreadedServer
-from threading import RLock
 
 
 USERS_DB = {
-    "foo" : "bar", 
-    "spam" : "bacon", 
-    "eggs" : "viking",
+    "foo": "bar", 
+    "spam": "bacon", 
+    "eggs": "viking",
 }
 broadcast_lock = RLock()
 tokens = set()
@@ -65,8 +66,5 @@ class ChatService(Service):
 
 
 if __name__ == "__main__":
-    t = ThreadedServer(ChatService, port = 19912)
+    t = ThreadedServer(ChatService, port=19912)
     t.start()
-
-
-

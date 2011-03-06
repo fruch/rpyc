@@ -8,7 +8,8 @@ import itertools
 import cPickle as pickle
 from threading import Lock
 from rpyc.lib.colls import WeakValueDict, RefCountingColl
-from rpyc.core import consts, brine, vinegar, netref
+from rpyc.core import consts, vinegar, netref
+from rpyc.core import brine
 from rpyc.core.async import AsyncResult
 
 
@@ -102,7 +103,7 @@ class Connection(object):
     #
     # IO 
     #
-    def _cleanup(self, _anyway = True):
+    def _cleanup(self, _anyway=True):
         if self._closed and not _anyway:
             return
         self._closed = True
@@ -119,7 +120,8 @@ class Connection(object):
         self._local_root = None
         #self._seqcounter = None
         #self._config.clear()
-    def close(self, _catchall = True):
+
+    def close(self, _catchall=True):
         if self._closed:
             return
         self._closed = True
@@ -132,17 +134,18 @@ class Connection(object):
                 if not _catchall:
                     raise
         finally:
-            self._cleanup(_anyway = True)
+            self._cleanup(_anyway=True)
     
     @property
     def closed(self):
         return self._closed
+
     def fileno(self):
         return self._channel.fileno()
     
-    def ping(self, data = "the world is a vampire!" * 20, timeout = 3):
+    def ping(self, data="the world is a vampire!" * 20, timeout=3):
         """assert that the other party is functioning properly"""
-        res = self.async_request(consts.HANDLE_PING, data, timeout = timeout)
+        res = self.async_request(consts.HANDLE_PING, data, timeout=timeout)
         if res.value != data:
             raise PingError("echo mismatches sent data")
     
@@ -153,15 +156,18 @@ class Connection(object):
             self._channel.send(data)
         finally:
             self._sendlock.release()
+
     def _send_request(self, handler, args):
         seq = self._seqcounter.next()
         self._send(consts.MSG_REQUEST, seq, (handler, self._box(args)))
         return seq
+
     def _send_reply(self, seq, obj):
         self._send(consts.MSG_REPLY, seq, self._box(obj))
+
     def _send_exception(self, seq, exctype, excval, exctb):
         exc = vinegar.dump(exctype, excval, exctb, 
-            include_local_traceback = self._config["include_local_traceback"])
+            include_local_traceback=self._config["include_local_traceback"])
         self._send(consts.MSG_EXCEPTION, seq, exc)
     
     #
@@ -245,9 +251,9 @@ class Connection(object):
     
     def _dispatch_exception(self, seq, raw):
         obj = vinegar.load(raw, 
-            import_custom_exceptions = self._config["import_custom_exceptions"], 
-            instantiate_custom_exceptions = self._config["instantiate_custom_exceptions"],
-            instantiate_oldstyle_exceptions = self._config["instantiate_oldstyle_exceptions"])
+            import_custom_exceptions=self._config["import_custom_exceptions"], 
+            instantiate_custom_exceptions=self._config["instantiate_custom_exceptions"],
+            instantiate_oldstyle_exceptions=self._config["instantiate_oldstyle_exceptions"])
         if seq in self._async_callbacks:
             self._async_callbacks.pop(seq)(True, obj)
         else:
@@ -283,26 +289,26 @@ class Connection(object):
         else:
             raise ValueError("invalid message type: %r" % (msg,))
 
-    def poll(self, timeout = 0):
+    def poll(self, timeout=0):
         """serve a single transaction, should one arrives in the given 
         interval. note that handling a request/reply may trigger nested 
         requests, which are all part of the transaction.
         
         returns True if one was served, False otherwise"""
-        data = self._recv(timeout, wait_for_lock = False)
+        data = self._recv(timeout, wait_for_lock=False)
         if not data:
             return False
         self._dispatch(data)
         return True
     
-    def serve(self, timeout = 1):
+    def serve(self, timeout=1):
         """serve a single request or reply that arrives within the given 
         time frame (default is 1 sec). note that the dispatching of a request
         might trigger multiple (nested) requests, thus this function may be 
         reentrant. returns True if a request or reply were received, False 
         otherwise."""
         
-        data = self._recv(timeout, wait_for_lock = True)
+        data = self._recv(timeout, wait_for_lock=True)
         if not data:
             return False
         self._dispatch(data)
@@ -316,15 +322,16 @@ class Connection(object):
                     self.serve(0.1)
             except select.error:
                 if not self.closed:
-                    raise e
+                    raise
             except EOFError:
                 pass
         finally:
             self.close()
     
-    def poll_all(self, timeout = 0):
-        """serve all requests and replies that arrive within the given interval.
-        returns True if at least one was served, False otherwise"""
+    def poll_all(self, timeout=0):
+        """serve all requests and replies that arrive within the given 
+        interval. returns True if at least one was served, False otherwise"""
+
         at_least_once = False
         try:
             while self.poll(timeout):
@@ -343,13 +350,15 @@ class Connection(object):
             self.serve(0.1)
         isexc, obj = self._sync_replies.pop(seq)
         if isexc:
+            print "dunno here"
             raise obj
         else:
             return obj
     
-    def _async_request(self, handler, args = (), callback = (lambda a, b: None)):
+    def _async_request(self, handler, args=(), callback=(lambda a, b: None)):
         seq = self._send_request(handler, args)
         self._async_callbacks[seq] = callback
+
     def async_request(self, handler, *args, **kwargs):
         """send a request and return an AsyncResult object, which will 
         eventually hold the reply"""
@@ -406,16 +415,22 @@ class Connection(object):
     #
     def _handle_ping(self, data):
         return data
+
     def _handle_close(self):
         self._cleanup()
+
     def _handle_getroot(self):
         return self._local_root
+
     def _handle_del(self, oid):
         self._local_objects.decref(oid)
+
     def _handle_repr(self, oid):
         return repr(self._local_objects[oid])
+
     def _handle_str(self, oid):
         return str(self._local_objects[oid])
+
     def _handle_cmp(self, oid, other):
         # cmp() might enter recursive resonance... yet another workaround
         #return cmp(self._local_objects[oid], other)
@@ -424,26 +439,39 @@ class Connection(object):
             return type(obj).__cmp__(obj, other)
         except TypeError:
             return NotImplemented
+
     def _handle_hash(self, oid):
         return hash(self._local_objects[oid])
+
     def _handle_call(self, oid, args, kwargs):
         return self._local_objects[oid](*args, **dict(kwargs))
+
     def _handle_dir(self, oid):
         return tuple(dir(self._local_objects[oid]))
+
     def _handle_inspect(self, oid):
         return tuple(netref.inspect_methods(self._local_objects[oid]))
+
     def _handle_getattr(self, oid, name):
-        return self._access_attr(oid, name, (), "_rpyc_getattr", "allow_getattr", getattr)
+        return self._access_attr(oid, name, (), "_rpyc_getattr", 
+                                 "allow_getattr", getattr)
+
     def _handle_delattr(self, oid, name):
-        return self._access_attr(oid, name, (), "_rpyc_delattr", "allow_delattr", delattr)
+        return self._access_attr(oid, name, (), "_rpyc_delattr", 
+                                 "allow_delattr", delattr)
+
     def _handle_setattr(self, oid, name, value):
-        return self._access_attr(oid, name, (value,), "_rpyc_setattr", "allow_setattr", setattr)
+        return self._access_attr(oid, name, (value,), "_rpyc_setattr", 
+                                 "allow_setattr", setattr)
+
     def _handle_callattr(self, oid, name, args, kwargs):
         return self._handle_getattr(oid, name)(*args, **dict(kwargs))
+
     def _handle_pickle(self, oid, proto):
         if not self._config["allow_pickle"]: 
             raise ValueError("pickling is disabled")
         return pickle.dumps(self._local_objects[oid], proto)
+
     def _handle_buffiter(self, oid, count):
         items = []
         obj = self._local_objects[oid]
@@ -464,5 +492,3 @@ class Connection(object):
             else:
                 raise NameError("no constant defined for %r", name)
     del name, name2, obj
-
-

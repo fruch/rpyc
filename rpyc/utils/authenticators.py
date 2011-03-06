@@ -123,5 +123,3 @@ class TlsliteVdbAuthenticator(object):
             raise AuthenticationError(str(ex))
         return sock2, sock2.allegedSrpUsername
 
-
-

@@ -1,6 +1,7 @@
-import rpyc
 import time
 import os
+
+import rpyc
 
 
 filename = "/tmp/floop.bloop"
@@ -9,7 +10,8 @@ if os.path.exists(filename):
 
 f = open(filename, "w")
 conn = rpyc.connect("localhost", 18871)
-bgsrv = rpyc.BgServingThread(conn)  # create a bg thread to process incoming events
+
+bgsrv = rpyc.BgServingThread(conn) # create a bg thread to process incoming events
 
 def on_file_changed(oldstat, newstat):
     print "file changed"

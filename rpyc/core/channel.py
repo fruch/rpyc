@@ -16,26 +16,32 @@ zlib = safe_import("zlib")
 # * add thread safety as a subclass?
 
 class Channel(object):
+    __slots__ = ["stream", "compress"]
+    
     COMPRESSION_THRESHOLD = 3000
     COMPRESSION_LEVEL = 1
     FRAME_HEADER = Struct("!LB")
     FLUSHER = "\n" # cause any line-buffered layers below us to flush
-    __slots__ = ["stream", "compress"]
     
-    def __init__(self, stream, compress = True):
+    def __init__(self, stream, compress=True):
         self.stream = stream
         if not zlib:
             compress = False
         self.compress = compress
+    
     def close(self):
         self.stream.close()
+    
     @property
     def closed(self):
         return self.stream.closed
+    
     def fileno(self):
         return self.stream.fileno()
+    
     def poll(self, timeout):
         return self.stream.poll(timeout)
+    
     def recv(self):
         header = self.stream.read(self.FRAME_HEADER.size)
         length, compressed = self.FRAME_HEADER.unpack(header)
@@ -43,6 +49,7 @@ class Channel(object):
         if compressed:
             data = zlib.decompress(data)
         return data
+    
     def send(self, data):
         if self.compress and len(data) > self.COMPRESSION_THRESHOLD:
             compressed = 1
@@ -52,7 +59,3 @@ class Channel(object):
         header = self.FRAME_HEADER.pack(len(data), compressed)
         buf = header + data + self.FLUSHER
         self.stream.write(buf)
-
-
-
-

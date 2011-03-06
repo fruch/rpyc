@@ -1,0 +1,2 @@
+#Rule of the thumb
+    #Every exception is within it's own module and imported.

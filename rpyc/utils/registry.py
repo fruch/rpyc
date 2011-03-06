@@ -9,7 +9,7 @@ from rpyc.core import brine
 
 
 DEFAULT_PRUNING_TIMEOUT = 4 * 60
-MAX_DGRAM_SIZE          = 1500
+MAX_DGRAM_SIZE          = 1480
 REGISTRY_PORT           = 18811
 
 
@@ -152,7 +152,7 @@ class UDPRegistryServer(RegistryServer):
         sock.bind((host, port))
         sock.settimeout(0.5)
         super(UDPRegistryServer, self).__init__(sock, 
-            pruning_timeout = pruning_timeout, logger = logger)
+            pruning_timeout=pruning_timeout, logger=logger)
     
     def _recv(self):
         return self.sock.recvfrom(MAX_DGRAM_SIZE)
@@ -175,7 +175,7 @@ class TCPRegistryServer(RegistryServer):
         sock.listen(10)
         sock.settimeout(0.5)
         super(TCPRegistryServer, self).__init__(sock, 
-            pruning_timeout = pruning_timeout, logger = logger)
+            pruning_timeout=pruning_timeout, logger=logger)
         self._connected_sockets = {}
     
     def _recv(self):
@@ -195,10 +195,11 @@ class TCPRegistryServer(RegistryServer):
 #------------------------------------------------------------------------------ 
 # clients (registrars)
 #------------------------------------------------------------------------------ 
+
 class RegistryClient(object):
     REREGISTER_INTERVAL = 60
     
-    def __init__(self, ip, port, timeout, logger = None):
+    def __init__(self, ip, port, timeout, logger=None):
         self.ip = ip
         self.port = port
         self.timeout = timeout
@@ -215,11 +216,12 @@ class RegistryClient(object):
     def unregister(self, port):
         raise NotImplementedError    
 
+
 class UDPRegistryClient(RegistryClient):
-    def __init__(self, ip = "255.255.255.255", port = REGISTRY_PORT, timeout = 2,
-    bcast = None, logger = None):
-        super(UDPRegistryClient, self).__init__(ip = ip, port = port, 
-            timeout = timeout, logger = logger)
+    def __init__(self, ip="255.255.255.255", port=REGISTRY_PORT, timeout=2,
+     bcast=None, logger=None):
+        super(UDPRegistryClient, self).__init__(ip=ip, port=port, 
+                                                    timeout=timeout, logger=logger)
         if bcast is None:
             bcast = "255" in ip.split(".")
         self.bcast = bcast
@@ -283,9 +285,9 @@ class UDPRegistryClient(RegistryClient):
 
 
 class TCPRegistryClient(RegistryClient):
-    def __init__(self, ip, port = REGISTRY_PORT, timeout = 2, logger = None):
-        super(TCPRegistryClient, self).__init__(ip = ip, port = port, 
-            timeout = timeout, logger = logger)
+    def __init__(self, ip, port=REGISTRY_PORT, timeout=2, logger=None):
+        super(TCPRegistryClient, self).__init__(ip=ip, port=port, 
+            timeout=timeout, logger=logger)
     
     def discover(self, name):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -344,14 +346,3 @@ class TCPRegistryClient(RegistryClient):
         except (socket.error, socket.timeout):
             self.logger.warn("could not connect to registry")
         sock.close()
-
-
-
-
-
-
-
-
-
-
-

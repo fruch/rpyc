@@ -2,6 +2,7 @@ import sys
 import os
 import inspect
 import cPickle as pickle
+
 import rpyc
 from rpyc import SlaveService
 from rpyc.utils import factory
@@ -12,9 +13,9 @@ DEFAULT_SERVER_PORT = 18812
 DEFAULT_SERVER_SSL_PORT = 18821
 
 
-#===============================================================================
+#==============================================================================
 # connecting
-#===============================================================================
+#==============================================================================
 def connect_channel(channel):
     return factory.connect_channel(channel, SlaveService)
 
@@ -27,7 +28,7 @@ def connect_stdpipes():
 def connect_pipes(input, output):
     return factory.connect_pipes(input, output, SlaveService)
 
-def connect(host, port = DEFAULT_SERVER_PORT):
+def connect(host, port=DEFAULT_SERVER_PORT):
     """creates a socket connection to the given host and port"""
     return factory.connect(host, port, SlaveService)
 
@@ -102,6 +103,7 @@ def download(conn, remotepath, localpath, filter = None, ignore_invalid = False,
     it should be downloaded; None means any file
     chunk_size - the IO chunk size
     """
+
     if conn.modules.os.path.isdir(remotepath):
         download_dir(conn, remotepath, localpath, filter)
     elif conn.modules.os.path.isfile(remotepath):
@@ -128,7 +130,7 @@ def download_dir(conn, remotepath, localpath, filter = None, chunk_size = 16000)
         if not filter or filter(fn):
             rfn = conn.modules.os.path.join(remotepath, fn)
             lfn = os.path.join(localpath, fn)
-            download(conn, rfn, lfn, filter = filter, ignore_invalid = True)
+            download(conn, rfn, lfn, filter=filter, ignore_invalid=True)
 
 def upload_package(conn, module, remotepath = None, chunk_size = 16000):
     """uploads a module or a package to the remote party"""
@@ -163,6 +165,7 @@ def deliver(conn, localobj):
 class redirected_stdio(object):
     """redirects the other party's stdin, stdout and stderr to those of the 
     local party, so remote STDIO will occur locally"""
+
     def __init__(self, conn):
         self._restored = True
         self.conn = conn
@@ -173,8 +176,10 @@ class redirected_stdio(object):
         self.conn.modules.sys.stdout = sys.stdout
         self.conn.modules.sys.stderr = sys.stderr
         self._restored = False
+
     def __del__(self):
         self.restore()
+
     def restore(self):
         if self._restored:
             return
@@ -182,8 +187,10 @@ class redirected_stdio(object):
         self.conn.modules.sys.stdin = self.orig_stdin
         self.conn.modules.sys.stdout = self.orig_stdout
         self.conn.modules.sys.stderr = self.orig_stderr
+
     def __enter__(self):
         return self
+
     def __exit__(self, t, v, tb):
         self.restore()
 
@@ -203,7 +210,7 @@ class redirected_stdio(object):
 #        conn.modules.sys.stdout = orig_stdout
 #        conn.modules.sys.stderr = orig_stderr
 
-def pm(conn):
+def post_mortem(conn):
     """pdb.pm on a remote exception"""
     #pdb.post_mortem(conn.root.getconn()._last_traceback)
     redir = redirected_stdio(conn)
@@ -212,7 +219,7 @@ def pm(conn):
     finally:
         redir.restore()
 
-def interact(conn, namespace = None):
+def interact(conn, namespace=None):
     """remote interactive interpreter"""
     if namespace is None:
         namespace = {}
@@ -225,7 +232,3 @@ def interact(conn, namespace = None):
         conn.namespace["_rinteract"](namespace)
     finally:
         redir.restore()
-
-
-
-

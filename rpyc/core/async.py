@@ -1,8 +1,8 @@
 import time
 
-
 class AsyncResultTimeout(Exception):
     pass
+
 
 class AsyncResult(object):
     """AsyncResult is an object that represent a computation that occurs in 
@@ -10,6 +10,7 @@ class AsyncResult(object):
     to access the result (which will block if the result has not yet arrived)
     """
     __slots__ = ["_conn", "_is_ready", "_is_exc", "_callbacks", "_obj", "_ttl"]
+    
     def __init__(self, conn):
         self._conn = conn
         self._is_ready = False
@@ -17,6 +18,7 @@ class AsyncResult(object):
         self._obj = None
         self._callbacks = []
         self._ttl = None
+    
     def __repr__(self):
         if self._is_ready:
             state = "ready"
@@ -27,6 +29,7 @@ class AsyncResult(object):
         else:
             state = "pending"
         return "<AsyncResult object (%s) at 0x%08x>" % (state, id(self))
+    
     def __call__(self, is_exc, obj):
         if self.expired:
             return
@@ -49,11 +52,12 @@ class AsyncResult(object):
         else:
             while True:
                 timeout = self._ttl - time.time()
-                self._conn.poll(timeout = max(timeout, 0))
+                self._conn.poll(timeout=max(timeout, 0))
                 if self._is_ready:
                     break
                 if timeout <= 0:
                     raise AsyncResultTimeout("result expired")
+    
     def add_callback(self, func):
         """adds a callback to be invoked when the result arrives. the 
         callback function takes a single argument, which is the current 
@@ -62,6 +66,7 @@ class AsyncResult(object):
             func(self)
         else:
             self._callbacks.append(func)
+    
     def set_expiry(self, timeout):
         """set the expiry time (in seconds, relative to now) or None for 
         unlimited time"""
@@ -78,12 +83,14 @@ class AsyncResult(object):
         if not self._is_ready:
             self._conn.poll_all()
         return self._is_ready
+    
     @property
     def error(self):
         """a predicate of whether the returned result is an exception"""
         if self.ready:
             return self._is_exc
         return False
+    
     @property
     def expired(self):
         """a predicate of whether the async result has expired"""
@@ -104,6 +111,3 @@ class AsyncResult(object):
             raise self._obj
         else:
             return self._obj
-
-
-

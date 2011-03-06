@@ -1,7 +1,8 @@
-import rpyc
-from rpyc.utils.server import ThreadedServer
 import time
 import threading
+
+import rpyc
+from rpyc.utils.server import ThreadedServer
 
 
 class Web8Service(rpyc.Service):
@@ -26,7 +27,7 @@ class Web8Service(rpyc.Service):
         
         def on_btn1_clicked(src):
             counter[0] += 1
-            lbl2.set_text("You have clicked the button %d times" % (counter[0],))
+            lbl2.set_text("You have clicked the button {0} times".format(counter[0]))
         
         btn1 = self.gtk.Button("Add 1")
         btn1.connect("clicked", on_btn1_clicked)
@@ -49,14 +50,14 @@ class Web8Service(rpyc.Service):
         
         def bg_timer_thread():
             while active[0]:
-                rpyc.async(lbl3.set_text)("Server time is: %s" % (time.ctime(),))
+                rpyc.async(lbl3.set_text)("Server time is: {0}".format(time.ctime()))
                 time.sleep(1)
         
         bg_thread = [None]
         
         def on_btn3_clicked(src):
             if btn3.get_label() == "Start timer":
-                bg_thread[0] = threading.Thread(target = bg_timer_thread)
+                bg_thread[0] = threading.Thread(target=bg_timer_thread)
                 active[0] = True
                 bg_thread[0].start()
                 btn3.set_label("Stop timer")
@@ -80,11 +81,6 @@ class Web8Service(rpyc.Service):
         self.content.pack_start(lbl)
 
 
-
-
 if __name__ == "__main__":
-    t = ThreadedServer(Web8Service, port = 18833)
+    t = ThreadedServer(Web8Service, port=18833)
     t.start()
-
-
-

@@ -6,7 +6,6 @@ import os
 import socket
 import time
 import threading
-import select
 import errno
 import logging
 from rpyc.core import SocketStream, Channel, Connection
@@ -17,9 +16,9 @@ signal = safe_import("signal")
 
 
 class Server(object):
-    def __init__(self, service, hostname = "0.0.0.0", port = 0, backlog = 10, 
-            reuse_addr = True, authenticator = None, registrar = None, 
-            auto_register = True, protocol_config = {}, logger = None):
+    def __init__(self, service, hostname="0.0.0.0", port=0, backlog=10, 
+            reuse_addr=True, authenticator=None, registrar=None, 
+            auto_register=True, protocol_config={}, logger=None):
         self.active = False
         self._closed = False
         self.service = service
@@ -102,7 +101,8 @@ class Server(object):
                 try:
                     sock, credentials = self.authenticator(sock)
                 except AuthenticationError:
-                    self.logger.info("%s:%s failed to authenticate, rejecting connection", h, p)
+                    self.logger.error("%s:%s failed to authenticate, rejecting connection"
+                                        , h, p)
                     return
                 else:
                     self.logger.info("%s:%s authenticated successfully", h, p)
@@ -128,9 +128,9 @@ class Server(object):
         else:
             self.logger.info("welcome %s:%s", h, p)
         try:
-            config = dict(self.protocol_config, credentials = credentials)
+            config = dict(self.protocol_config, credentials=credentials)
             conn = Connection(self.service, Channel(SocketStream(sock)), 
-                config = config, _lazy = True)
+                config=config, _lazy=True)
             conn._init_service()
             conn.serve_all()
         finally:
@@ -189,7 +189,7 @@ class ThreadedServer(Server):
         return logging.getLogger(self.service.get_service_name())
     
     def _accept_method(self, sock):
-        t = threading.Thread(target = self._authenticate_and_serve_client, args = (sock,))
+        t = threading.Thread(target=self._authenticate_and_serve_client, args=(sock,))
         t.setDaemon(True)
         t.start()
 
