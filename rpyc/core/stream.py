@@ -82,10 +82,12 @@ class SocketStream(Stream):
 
     @classmethod
     def _connect(cls, host, port, family=socket.AF_INET, type=socket.SOCK_STREAM, 
-                 proto=0, timeout=3):
+                 proto=0, timeout=3, nodelay = False):
         s = socket.socket(family, type, proto)
         s.settimeout(timeout)
         s.connect((host, port))
+        if nodelay:
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return s
 
     @classmethod
@@ -254,7 +256,7 @@ class Win32PipeStream(Stream):
         try:
             data = []
             while count > 0:
-                dummy, buf = win32file.ReadFile(self.incoming, min(self.MAX_IO_CHUNK, count))
+                dummy, buf = win32file.ReadFile(self.incoming, int(min(self.MAX_IO_CHUNK, count)))
                 count -= len(buf)
                 data.append(buf)
         except TypeError, ex:

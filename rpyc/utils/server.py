@@ -108,7 +108,12 @@ class Server(object):
                     self.logger.info("%s:%s authenticated successfully", h, p)
             else:
                 credentials = None
-            self._serve_client(sock, credentials)
+            
+            try:
+                self._serve_client(sock, credentials)
+            except Exception:               #< - little generic for my tastes!!!!!!!!!!!!!!!
+                self.logger.exception("client connection terminated abruptly")
+                raise
         finally:
             try:
                 sock.shutdown(socket.SHUT_RDWR)
@@ -119,7 +124,11 @@ class Server(object):
     
     def _serve_client(self, sock, credentials):
         h, p = sock.getpeername()
-        self.logger.info("welcome %s:%s", h, p)
+
+        if credentials:
+            self.logger.info("welcome %s:%s (%r)", h, p, credentials)
+        else:
+            self.logger.info("welcome %s:%s", h, p)
         try:
             config = dict(self.protocol_config, credentials=credentials)
             conn = Connection(self.service, Channel(SocketStream(sock)), 
@@ -202,15 +211,19 @@ class ForkingServer(Server):
         return logging.getLogger('rpyc.services.' + self.service.get_service_name())
 
     
-    @staticmethod
-    def _handle_sigchld(signum, unused):
+    @classmethod
+    def _handle_sigchld(cls, signum, unused):
         try:
             while True:
-                os.waitpid(-1, os.WNOHANG)
+                #os.waitpid(-1, os.WNOHANG)
+                pid, dummy = os.waitpid(-1, os.WNOHANG)
+                if pid <= 0:
+                    break
+                
         except OSError:
             pass
         # re-register signal handler (see man signal(2), under Portability)
-        signal.signal(signal.SIGCHLD, self._handle_sigchld)
+        signal.signal(signal.SIGCHLD, cls._handle_sigchld)
     
     def _accept_method(self, sock):
         pid = os.fork()
