@@ -19,22 +19,19 @@ class Test_SSL(object):
         print self.cert, self.key
         
         authenticator = SSLAuthenticator(self.key, self.cert, ssl_version=ssl.PROTOCOL_TLSv1)
-        self.server = ThreadedServer(SlaveService, hostname = "localhost",port = 18815, auto_register=False, reuse_addr = True)
-            #authenticator = authenticator, port=18815)
+        self.server = ThreadedServer(SlaveService, hostname = "localhost",port = 18812, 
+            auto_register=False, authenticator = authenticator)
         self.server.logger.quiet = False
         t = threading.Thread(target=self.server.start)
         t.start()
-        #time.sleep(1) # make sure the server has initialized, etc.
-
 
     def teardown(self):
         self.server.close()
         
     def test_ssl_conenction(self):
-        c = rpyc.connect("localhost", port = 18815)
-        #, keyfile=self.key, certfile=self.cert,
-        #    ssl_version=ssl.PROTOCOL_TLSv1 ,port = 18815)
-        print dir(c)
+        c = rpyc.classic.ssl_connect("localhost", port = 18812, 
+            keyfile=self.key, certfile=self.cert,
+            ssl_version=ssl.PROTOCOL_TLSv1)
         print c.modules.sys
         print c.modules["xml.dom.minidom"].parseString("<a/>")
         c.execute("x = 5")
