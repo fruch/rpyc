@@ -39,8 +39,8 @@ class AuthenticationError(Exception):
     pass
 
 
-def SSLAuthenticator(object):
-    def __init__(self, keyfile, certfile, ca_certs = None, ssl_version = None):
+class SSLAuthenticator(object):
+    def __init__(self, keyfile=None, certfile=None, ca_certs = None, ssl_version = None):
         self.keyfile = keyfile
         self.certfile = certfile
         self.ca_certs = ca_certs
@@ -52,15 +52,15 @@ def SSLAuthenticator(object):
             self.ssl_version = ssl_version
         else:
             self.ssl_version = ssl.PROTOCOL_TLSv1
-    
+        
     def __call__(self, sock):
-        try:
-            sock2 = ssl.wrap_socket(sock, keyfile = self.keyfile, certfile = self.certfile,
-                server_side = True, ssl_version = self.ssl_version, ca_certs = self.ca_certs,
-                cert_reqs = self.cert_reqs)
-        except ssl.SSLError, ex:
-            raise AuthenticationError(str(ex))
-        return sock2, sock2.getpeercert()
+       try:
+           sock2 = ssl.wrap_socket(sock, keyfile = self.keyfile, certfile = self.certfile,
+               server_side = True, ssl_version = self.ssl_version, ca_certs = self.ca_certs,
+               cert_reqs = self.cert_reqs)
+       except ssl.SSLError, ex:
+           raise AuthenticationError(str(ex))
+       return sock2, sock2.getpeercert()
 
 
 class TlsliteVdbAuthenticator(object):
