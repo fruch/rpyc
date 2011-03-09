@@ -2,7 +2,7 @@ import sys
 import time
 from threading import Thread
 
-from nose.plugins.skip import SkipTest
+from nose import SkipTest
 
 import rpyc
 from rpyc.core.stream import PipeStream, NamedPipeStream

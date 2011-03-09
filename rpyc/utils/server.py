@@ -213,7 +213,7 @@ else:
             signal.signal(signal.SIGCHLD, self._prevhandler)
         
         def _get_logger(self):
-            return Logger(self.service.get_service_name(), show_pid = True)
+            return logging.getLogger(self.service.get_service_name())
         
         @classmethod
         def _handle_sigchld(cls, signum, unused):

@@ -1,5 +1,5 @@
 """
-.
+::
          #####    #####             ####
         ##   ##  ##   ##           ##             ####      
         ##  ##   ##  ##           ##                 #
@@ -16,12 +16,12 @@ Licensed under the MIT license (see `LICENSE` file)
 A transparent, symmetric and light-weight RPC and distributed computing 
 library for python.
 
-Usage:
+Usage::
     import rpyc
     c = rpyc.connect_by_service("SERVICENAME")
     print c.root.some_function(1, 2, 3)
 
-Classic-style usage:
+Classic-style usage::
     import rpyc
     # `hostname` is assumed to be running a slave-service server
     c = rpyc.classic.connect("hostname") 
