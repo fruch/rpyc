@@ -3,16 +3,24 @@ import os.path
 from rpyc.utils.authenticators import SSLAuthenticator
 from rpyc.utils.server import ThreadedServer
 from rpyc import SlaveService
-import threading, time
-import ssl
+import threading
+import time
 
-'''
-created key like that
-http://www.akadia.com/services/ssh_test_certificate.html
+from nose import SkipTest
 
-openssl req -newkey rsa:1024 -nodes -keyout mycert.pem -out mycert.pem
-'''
-class Test_SSL_classic(object):
+try:
+    import ssl
+except ImportError:
+    raise SkipTest("requires ssl")
+
+
+class Test_SSL(object):
+    '''
+    created key like that
+    http://www.akadia.com/services/ssh_test_certificate.html
+    
+    openssl req -newkey rsa:1024 -nodes -keyout mycert.pem -out mycert.pem
+    '''
     def setup(self):
         self.key = os.path.join( os.path.dirname(__file__) , "server.key")
         self.cert =  os.path.join( os.path.dirname(__file__) , "server.crt")
@@ -32,8 +40,7 @@ class Test_SSL_classic(object):
     def teardown(self):
         self.conn.close()
         self.server.close()
-        time.sleep(1)
-        
+
     def test_ssl_conenction(self):
         
         print self.conn.root.modules.sys
@@ -63,7 +70,6 @@ class MyService(rpyc.Service):
         return math.sqrt((x2-x1)**2 + (y2-y1)**2)
         
 class Test_SSL_Service(object):
-    
     def setup(self):
         self.key = os.path.join( os.path.dirname(__file__) , "server.key")
         self.cert =  os.path.join( os.path.dirname(__file__) , "server.crt")
@@ -86,3 +92,4 @@ class Test_SSL_Service(object):
         
     def test_calling_service(self):
         assert self.conn.root.distance((2,7), (5,11)) == 5
+ 

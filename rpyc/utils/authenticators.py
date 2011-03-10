@@ -40,7 +40,7 @@ class AuthenticationError(Exception):
 
 
 class SSLAuthenticator(object):
-    def __init__(self, keyfile=None, certfile=None, ca_certs = None, ssl_version = None):
+    def __init__(self, keyfile, certfile, ca_certs = None, ssl_version = None):
         self.keyfile = keyfile
         self.certfile = certfile
         self.ca_certs = ca_certs

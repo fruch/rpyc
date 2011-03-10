@@ -1,8 +1,5 @@
 """
 NetRef - transparent network references implementation.
-
-SURGEON GENERAL'S WARNING: Black magic is known to causes Lung Cancer,
-Heart Disease, Emphysema, and May Complicate Pregnancy. Close your eyes!
 """
 import sys
 import inspect
@@ -68,7 +65,6 @@ class BaseNetref(object):
     def __init__(self, conn, oid):
         self.____conn__ = conn
         self.____oid__ = oid
-
     def __del__(self):
         try:
             asyncreq(self, consts.HANDLE_DEL)

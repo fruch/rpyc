@@ -401,7 +401,9 @@ class Connection(object):
         return False
     
     def _access_attr(self, oid, name, args, overrider, param, default):
-        if type(name) is not str:
+        if type(name) is unicode:
+            name = str(name) # IronPython issue
+        elif type(name) is not str:
             raise TypeError("attr name must be a string")
         obj = self._local_objects[oid]
         accessor = getattr(type(obj), overrider, None)
@@ -445,8 +447,7 @@ class Connection(object):
 
     def _handle_hash(self, oid):
         return hash(self._local_objects[oid])
-
-    def _handle_call(self, oid, args, kwargs):
+    def _handle_call(self, oid, args, kwargs=()):
         return self._local_objects[oid](*args, **dict(kwargs))
 
     def _handle_dir(self, oid):
@@ -478,11 +479,13 @@ class Connection(object):
     def _handle_buffiter(self, oid, count):
         items = []
         obj = self._local_objects[oid]
-        for i in xrange(count):
-            try:
+        i = 0
+        try:
+            while i < count:
                 items.append(obj.next())
-            except StopIteration:
-                break
+                i += 1
+        except StopIteration:
+            pass
         return tuple(items)
     
     # collect handlers

@@ -5,9 +5,10 @@ import sys
 
 
 l = threading.Lock()
-listener = socket.socket()
+listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listener.bind(("localhost", 0))
 listener.listen(1)
-s2 = socket.socket()
+s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s2.connect(listener.getsockname())
 s3 = listener.accept()[0]
 
