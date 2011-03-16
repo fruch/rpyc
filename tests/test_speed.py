@@ -1,6 +1,5 @@
 import rpyc
 import time
-import pushy
 import threading
 import unittest
 import logging
@@ -8,55 +7,54 @@ import logging
 from rpyc.utils.server import ThreadedServer
 from rpyc.core.service import SlaveService
 
-BIG = SMALL = connection = None
+BIG = SMALL = connection = bgsrv = None
 TARGET_HOSTNAME = "localhost" 
 server = None
-def setup_pushy():
-    ''' connect and import the modules into globals'''
-    global BIG , SMALL , connection, server
+
+# import pushy
+# def setup_pushy():
+    # ''' connect and import the modules into globals'''
+    # global BIG , SMALL , connection, server
     
-    server = threading.Thread(target=pushy.server.run)
-    server.start()
+    # server = threading.Thread(target=pushy.server.run)
+    # server.start()
     
-    connection = pushy.client.connect("daemon:localhost")
+    # connection = pushy.client.connect("daemon:localhost")
     
-    #connection.execute("import sys; reload(sys)")
-    #connection.execute("import os; reload(os)")
+    # BIG = connection.modules.win32con
+    # SMALL = connection.modules.re
     
-    BIG = connection.modules.asyncore
-    SMALL = connection.modules.msvcrt
-    
-def teardown_pushy():
-    '''  clean all services and stop connection '''
-    global BIG , SMALL , connection, server
-    del BIG 
-    del SMALL 
-    connection.close() 
-    del connection
-    del server
+# def teardown_pushy():
+    # '''  clean all services and stop connection '''
+    # global BIG , SMALL , connection, server
+    # del BIG 
+    # del SMALL 
+    # connection.close() 
+    # del connection
+    # del server
  
 def setup_rpyc():
     ''' connect and import the modules into globals'''
-    global BIG , SMALL , connection
+    global BIG , SMALL , connection, bgsrv
      
     connection = rpyc.classic.connect_thread()
     #bgsrv = rpyc.BgServingThread(connection)
-
-    connection.execute("import asyncore; reload(asyncore)")
-    connection.execute("import msvcrt; reload(msvcrt)")
+    bgsrv = None
+    #connection.execute("import re; reload(asyncore)")
+    #connection.execute("import msvcrt; reload(msvcrt)")
     
-    BIG = connection.modules.asyncore
-    SMALL = connection.modules.msvcrt   
+    BIG = connection.modules.win32con
+    SMALL = connection.modules.re   
 
 def teardown_rpyc():
     '''  clean all services and stop connection '''
-    global BIG , SMALL , connection
+    global BIG , SMALL , connection, bgsrv
     
     del BIG
     del SMALL  
-
+    #bgsrv.stop()
     connection.close()
-    
+    del bgsrv
     del connection
     
 def decorator(fn, module):
@@ -75,12 +73,12 @@ def add_decorators_to_module(moudle):
     logging.debug("add_decorators_to_module [%s] : %0.6f" % 
         (moudle.__name__, (t1-t)) )
 
-class Pushy_Tests(unittest.TestCase):
+class Speed_Tests(unittest.TestCase):
     
     def setUp(self):
-        pass
+        setup_rpyc()
     def tearDown(self):
-        pass
+        teardown_rpyc()
     def test_import_locals_global_timing(self):
         def import_to_global(module):
             '''copy all public func from remote module into globals'''
@@ -114,7 +112,7 @@ class Pushy_Tests(unittest.TestCase):
         add_decorators_to_module(BIG)
 
 if __name__ == '__main__':
-    setup_pushy()
+    
     FORMAT = "%(levelname)s: %(asctime)s | %(message)s"
     DATA_FORMAT = '%y/%m/%d %H:%M:%S'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT, datefmt=DATA_FORMAT)
