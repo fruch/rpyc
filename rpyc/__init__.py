@@ -36,7 +36,8 @@ import platform
 if platform.system()=='cli':#Detect .NET platform
 	import clr
 	clr.AddReference("IronPython.Zlib")#Add Reference to IronPython zlib -- https://bitbucket.org/jdhardy/ironpythonzlib --
-from rpyc.core import (SocketStream, PipeStream, Channel, Connection, Service,
+	
+from rpyc.core import (SocketStream, PipeStream, Channel, SshConnection, Connection, Service,
     BaseNetref, AsyncResult, GenericException, AsyncResultTimeout, VoidService,
     SlaveService)
 
